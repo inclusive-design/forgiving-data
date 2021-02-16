@@ -1,0 +1,42 @@
+{
+    datasets: {
+        WeCount: {
+            sourceType: "git",
+            repository: "https://github.com/inclusive-design/covid-assessment-centres",
+            path: "WeCount/assessment_centre_data_collection_2020_09_02.csv",
+        },
+        ODC: {
+            sourceType: "git",
+            repository: "https://github.com/inclusive-design/covid-assessment-centres",
+            path: "ODC/assessment_centre_locations_2021_02_10.csv" // interpolate from "latest" - invent JSON-R
+        }
+    },
+    pipelines: {
+        join: {
+            type: "fluid.forgivingJoin",
+            left: "WeCount",
+            right: "ODC",
+            outputColumns: {
+                city:          "ODC.city",
+                location_name: "ODC.location_name",
+                website:       "ODC.website",
+                phone:         "ODC.phone",
+                postal_code:   "ODC.postal_code",                
+                address:       "ODC.address", 
+                province:      "ODC.province",
+                monday:        "ODC.monday",
+                tuesday:       "ODC.tuesday",
+                wednesday:     "ODC.wedesday",
+                thursday:      "ODC.thursday",
+                friday:        "ODC.friday",
+                latitude:      "ODC.latitude",
+                longitude:     "ODC.longitude",
+                "Accessible Entrances": "WeCount.Wheelchair-accessible entrance",
+                "Accessible Washrooms": "WeCount.Wheelchair-accessible bathrooms",
+                "Accessible Parking":   "WeCount.Accessible parking",
+                "Individual Service":   "WeCount.Personalized or individual service is offered",
+                "Wait Accommodations":  "WeCount.Queue accomodations"
+            }
+        }
+    }
+}
