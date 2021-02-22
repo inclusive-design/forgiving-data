@@ -1,3 +1,5 @@
+"use strict";
+
 var fluid = require("infusion");
 
 fluid.module.register("forgiving-data", __dirname, require);

@@ -1,4 +1,5 @@
 {
+    type: "fluid.pipelines.WeCount-ODC",
     datasets: {
         WeCount: {
             sourceType: "git",
@@ -11,14 +12,15 @@
             path: "ODC/assessment_centre_locations_2021_02_10.csv" // interpolate from "latest" - invent JSON-R
         }
     },
-    pipelines: {
+    pipeline: {
         join: {
             type: "fluid.forgivingJoin",
             left: "WeCount",
             right: "ODC",
+            outerRight: true,
             outputColumns: {
-                city:          "ODC.city",
                 location_name: "ODC.location_name",
+                city:          "ODC.city",
                 website:       "ODC.website",
                 phone:         "ODC.phone",
                 postal_code:   "ODC.postal_code",                
@@ -26,7 +28,7 @@
                 province:      "ODC.province",
                 monday:        "ODC.monday",
                 tuesday:       "ODC.tuesday",
-                wednesday:     "ODC.wedesday",
+                wednesday:     "ODC.wednesday",
                 thursday:      "ODC.thursday",
                 friday:        "ODC.friday",
                 latitude:      "ODC.latitude",
@@ -36,7 +38,16 @@
                 "Accessible Parking":   "WeCount.Accessible parking",
                 "Individual Service":   "WeCount.Personalized or individual service is offered",
                 "Wait Accommodations":  "WeCount.Queue accomodations"
-            }
+            },
+            // TODO: output should actually be a pipe member, produce standard "gyre" semantics for pipe topology
+        },
+        output: {
+            type: "fluid.fileOutput",
+            input: "join",
+            path: "outputData",
+            output: "output.csv",
+            provenance: "provenance.csv",
+            provenanceMap: "provenanceMap.json"
         }
     }
 }

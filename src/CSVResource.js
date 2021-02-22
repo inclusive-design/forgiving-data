@@ -4,10 +4,9 @@
 
 var fluid = require("infusion");
 var Papa = require("papaparse");
+var fs = require("fs");
 
-/* global Papa */
-
-"use strict";
+fluid.registerNamespace("fluid.data");
 
 // Taken from %covid-data-monitor/src/js/CSVResource.js
 
@@ -31,4 +30,12 @@ fluid.resourceLoader.parsers.csv = function (resourceText, options) {
         });
     }
     return togo;
+};
+
+fluid.data.writeCSV = function (filename, data) {
+    var outputString = Papa.unparse(data, {
+        newline: "\n"
+    }) + "\n";
+    fs.writeFileSync(filename, outputString, "utf-8");
+    console.log("Written " + outputString.length + " bytes (" + data.length + " columns, " + Object.keys(data[0]).length + " rows) to " + filename);
 };

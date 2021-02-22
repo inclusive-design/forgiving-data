@@ -26,3 +26,7 @@ jspm_packages/
 # Our work directory
 
 data/
+
+# Our sample outputs
+
+outputData/
