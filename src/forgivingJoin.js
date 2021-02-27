@@ -6,6 +6,7 @@ var fluid = require("infusion");
 var fs = require("fs"),
     path = require("path");
 var simpleGit = require("simple-git");
+var rimraf = require("rimraf");
 
 require("./readJSON.js");
 require("./settleStructure.js");
@@ -26,6 +27,8 @@ fluid.data.loadJob = function (filename, workingDir) {
     var resolved = fluid.module.resolvePath(filename);
     var job = fluid.data.readJSONSync(resolved);
     var working = fluid.module.resolvePath(workingDir);
+    rimraf.sync(working);
+    fs.mkdirSync(working, { recursive: true });
     var git = simpleGit(working);
     var csvPromises = fluid.transform(job.datasets, function (dataset) {
         var prefix = fluid.data.gitUrlToPrefix(dataset.repository);
