@@ -2,8 +2,6 @@
 
 var fluid = require("infusion");
 
-require("./flatObject.js");
-
 // Unclear whether the variety with proxies is workable for any high-performance requirement.
 // See prior art on "membranes" at https://github.com/ajvincent/es-membrane and
 // https://tvcutsem.github.io/js-membranes
@@ -23,7 +21,7 @@ fluid.tangledMat = function (layersIn, useProxies) {
             // [provenanceMap: Object|Array (isomorphic to layer)]
             // }
         ],
-        // root: lazily initialised from fluid.tangledMat.getMetadataRoot - since we can't know what its type is without layers
+        // root: lazily initialised from fluid.tangledMat.getMetadataRoot - since we can't know what its type is without seeing layers
         // Note that the overall root must be [] or {} otherwise we would have nowhere to put the metadata
         writeLayer: null,
         writeLayerIndex: -1,
@@ -35,10 +33,8 @@ fluid.tangledMat = function (layersIn, useProxies) {
 
 fluid.tangledMat.metadata = Symbol("metadata");
 
-fluid.registerNamespace("fluid.tangledMat.methods");
-
-fluid.tangledMat.methods.addLayer = function (mat, value, layerName) {
-    console.log("addLayer with mat ", mat);
+fluid.tangledMat.addLayer = function (value, layerName) {
+    var mat = this;
     mat.layers.push({
         value: value,
         name: layerName
@@ -46,11 +42,11 @@ fluid.tangledMat.methods.addLayer = function (mat, value, layerName) {
 };
 
 /** Evaluate the mat root if it has not already been evaluated, and return the metadata root
- * @param {fluid.tangledMat} mat - The mat for which the root will be fetched
  * @return {Object|Array} The mat root or proxy to it
  */
-fluid.tangledMat.methods.getMetadataRoot = function (mat) {
-    var $m = fluid.tangledMat.metadata;
+fluid.tangledMat.getMetadataRoot = function () {
+    var $m = fluid.tangledMat.metadata,
+        mat = this;
     var holder = mat.metadataRoot;
     if (!holder) {
         var cell = mat.mergedValueCell([]);
@@ -65,24 +61,24 @@ fluid.tangledMat.methods.getMetadataRoot = function (mat) {
 };
 
 /** Evaluate the mat root if it has not already been evaluated, and return either the "value root" or the proxied root.
- * @param {fluid.tangledMat} mat - The mat for which the root will be fetched
  * @return {Object|Array} The mat root or proxy to it
  */
-fluid.tangledMat.methods.getRoot = function (mat) {
-    var $m = fluid.tangledMat.metadata;
+fluid.tangledMat.getRoot = function () {
+    var $m = fluid.tangledMat.metadata,
+        mat = this;
     var holder = mat.getMetadataRoot();
     var cell = holder[$m];
     return mat.useProxies ? cell.proxy : cell.value;
 };
 
 /** Returns an array of all the (currently evaluated) members found from the mat's root object along a given path
- * @param {fluid.tangledMat} mat - The mat
  * @param {String[]} path - Path to be evaluated
  * @return {Object[]} A path with the same number of segments as path, containing the objects encountered, with the
  * mat root as the first, and the holder of the final path segment as the last (does not evaluate path[path.length - 1])
  */
-fluid.tangledMat.methods.pathToRoot = function (mat, path) {
-    var $m = fluid.tangledMat.metadata;
+fluid.tangledMat.pathToRoot = function (path) {
+    var $m = fluid.tangledMat.metadata,
+        mat = this;
     var root = mat.getMetadataRoot()[$m].value;
     var togo = [root];
     for (var i = 0; i < path.length - 1; ++i) {
@@ -92,11 +88,11 @@ fluid.tangledMat.methods.pathToRoot = function (mat, path) {
 };
 
 /** Compute mat top value by searching from right to left at a given path, returns cell
- * @param {fluid.tangledMat} mat - The mat
  * @param {String[]} path - Path to be evaluated
  * @return {ValueCell|undefined} Structure describing value found, containing members value, layerIndex, provenance - or undefined
  */
-fluid.tangledMat.methods.mergedValueCell = function (mat, path) {
+fluid.tangledMat.mergedValueCell = function (path) {
+    var mat = this;
     for (var i = mat.layers.length - 1; i >= 0; --i) {
         var layer = mat.layers[i];
         var value = fluid.getImmediate(layer.value, path);
@@ -113,14 +109,14 @@ fluid.tangledMat.methods.mergedValueCell = function (mat, path) {
 
 /** Read what should be a member value of a "mat top" given the holder of the value, path to it and member name. This is assigned
  * into the structure by either readMember or getRoot
- * @param {fluid.tangledMat} mat - Mat structure containing the value to be read
  * @param {String[]} path - Path to the value holding the member to be read
  * @param {Any} holder - Metadata mat top record corresponding to value to be read. This must be a "trunk holder" with a cell at $m
  * @param {String} member - Member name to be read
  * @return {Any|undefined} The read value as a cell containing {value, provenance, layerIndex, [proxy]}
  */
-fluid.tangledMat.methods.readMember = function (mat, path, holder, member) {
-    var $m = fluid.tangledMat.metadata;
+fluid.tangledMat.readMember = function (path, holder, member) {
+    var $m = fluid.tangledMat.metadata,
+        mat = this;
     var childHolder = holder[member]; // If the mat top already has such a member, it is surely correct
     if (childHolder) {
         return childHolder;
@@ -146,6 +142,8 @@ fluid.tangledMat.methods.readMember = function (mat, path, holder, member) {
     }
 };
 
+
+// NOTE: Not this-ist!
 fluid.tangledMat.ensureContainer = function (holder, seg, exemplar) {
     if (fluid.typeCode(holder[seg]) !== fluid.typeCode(exemplar)) {
         var newContainer = fluid.freshContainer(exemplar);
@@ -154,10 +152,9 @@ fluid.tangledMat.ensureContainer = function (holder, seg, exemplar) {
     return holder[seg];
 };
 
-
-
-fluid.tangledMat.methods.getProvenanceMap = function (mat) {
-    var $m = fluid.tangledMat.metadata;
+fluid.tangledMat.getProvenanceMap = function () {
+    var $m = fluid.tangledMat.metadata,
+        mat = this;
     mat.evaluateFully([]);
     var transform = function (metadata) {
         return fluid.transform(metadata, function (member) {
@@ -167,7 +164,8 @@ fluid.tangledMat.methods.getProvenanceMap = function (mat) {
     return transform(mat.metadataRoot);
 };
 
-fluid.tangledMat.methods.getAllMembers = function (mat, path) {
+fluid.tangledMat.getAllMembers = function (path) {
+    var mat = this;
     var members = {};
     for (var i = mat.layers.length - 1; i >= 0; --i) {
         var layer = mat.layers[i];
@@ -181,8 +179,9 @@ fluid.tangledMat.methods.getAllMembers = function (mat, path) {
     return members;
 };
 
-fluid.tangledMat.methods.evaluateFully = function (mat, path) {
-    var $m = fluid.tangledMat.metadata;
+fluid.tangledMat.evaluateFully = function (path) {
+    var $m = fluid.tangledMat.metadata,
+        mat = this;
     var move = mat.getMetadataRoot();
     for (var i = 1; i < path.length; ++i) {
         var shortPath = path.substring(0, i);
@@ -203,15 +202,15 @@ fluid.tangledMat.methods.evaluateFully = function (mat, path) {
 
 /** Construct the proxy object to be used when dispensed wrapping a particular mat top path. These will be produced when the
  * `useProxies` argument is set to `true` when constructing the mat.
- * @param {fluid.tangledMat} mat - The mat holding the value
  * @param {String[]} path - Path segments leading to the value
  * @param {Object|Array} holder - The "holder" of the mat value. This will be isomorphic to the value, and will contain a metadata
  * `cell` at member $m
  * @return {Proxy} A proxy which will force evaluation of the mat members when its properties are read, and write to the
  * writable layer of the mat when they are written
  */
-fluid.tangledMat.methods.makeProxy = function (mat, path, holder) {
-    var $m = fluid.tangledMat.metadata;
+fluid.tangledMat.makeProxy = function (path, holder) {
+    var $m = fluid.tangledMat.metadata,
+        mat = this;
     var proxy = new Proxy(holder[$m].value, {
         get: function (target, member) {
             var childHolder = mat.readMember(path, holder, member);
@@ -242,16 +241,16 @@ fluid.tangledMat.methods.makeProxy = function (mat, path, holder) {
     return proxy;
 };
 
-fluid.tangledMat.methods.findLayer = function (mat, layerName) {
+fluid.tangledMat.findLayer = function (layerName) {
+    var mat = this;
     return mat.layers.findIndex(function (entry) {
         return entry.name === layerName;
     });
 };
 
-fluid.tangledMat.methods.setWriteableLayer = function (mat, layerName) {
+fluid.tangledMat.setWriteableLayer = function (layerName) {
+    var mat = this;
     var index = mat.findLayer(layerName);
     mat.writeLayer = layerName;
     mat.writeLayerIndex = index;
 };
-
-fluid.flatObject.defineMethodProperties(fluid.tangledMat);
