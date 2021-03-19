@@ -3,63 +3,8 @@
 "use strict";
 
 var fluid = require("infusion");
-var fs = require("fs"),
-    path = require("path");
-var simpleGit = require("simple-git");
-var rimraf = require("rimraf");
-
-require("./readJSON.js");
-require("./settleStructure.js");
 
 fluid.registerNamespace("fluid.data");
-
-fluid.data.gitUrlToPrefix = function (url) {
-    // cf. https://github.com/inclusive-design/data-update-github/blob/main/scripts/fetchODCDataFilesUtils.js#L171
-    var pattern = /https:\/\/github.com\/(.*)\/(.*)/;
-    console.log(url);
-    var matches = pattern.exec(url);
-    var user = matches[1];
-    var repo = matches[2];
-    return "github-" + user + "-" + repo + "/";
-};
-
-fluid.data.loadJob = function (filename, workingDir) {
-    var resolved = fluid.module.resolvePath(filename);
-    var job = fluid.data.readJSONSync(resolved);
-    var working = fluid.module.resolvePath(workingDir);
-    rimraf.sync(working);
-    fs.mkdirSync(working, { recursive: true });
-    var git = simpleGit(working);
-    var csvPromises = fluid.transform(job.datasets, function (dataset) {
-        var prefix = fluid.data.gitUrlToPrefix(dataset.repository);
-        console.log("prefix " + prefix);
-        var repoPath = path.join(working, prefix);
-        console.log("Checking " + repoPath);
-        var cloneAction;
-        if (fs.existsSync(repoPath)) {
-            cloneAction = fluid.promise().resolve();
-        } else {
-            cloneAction = git.clone(dataset.repository, prefix);
-        }
-        var togo = fluid.promise();
-        cloneAction.then(function () {
-            var fullPath = path.join(repoPath, dataset.path);
-            var text = fs.readFileSync(fullPath, "utf-8");
-            fluid.promise.follow(fluid.resourceLoader.parsers.csv(text, {resourceSpec: {}}), togo);
-        });
-        return togo;
-    });
-    var togo = fluid.promise();
-    return fluid.promise.map(fluid.settleStructure(csvPromises), function (csvs) {
-        fluid.each(csvs, function (onecsv, key) {
-            // Less sleazy would be an applyImmutable if we had it - note that this is an interesting case where
-            // we can apply an "overlay" structure with one fewer clone if we can see the whole thing up front
-            job.datasets[key] = onecsv;
-        });
-        return job;
-    });
-    return togo;
-};
 
 // Returns hash to true of column members
 fluid.data.columnToKeys = function (data, key) {
@@ -154,6 +99,7 @@ fluid.getMembersDeep = function (holder, path) {
 };
 
 fluid.forgivingJoin = function (record, datasets) {
+    // TODO: datasets should be provided in provenance form also
     var left = datasets[record.left];
     var right = datasets[record.right];
 
@@ -190,14 +136,17 @@ fluid.forgivingJoin = function (record, datasets) {
 
     var leftIndex = fluid.data.indexByColumn(left.data, best.leftKey);
     var rightIndex = fluid.data.indexByColumn(right.data, best.rightKey);
+    // Assemble the "full join" structure containing all prefixed keys mapped over all rows which are in common (the inner join core)
     var fullJoin = Object.keys(best.keys).map(function (key) {
         var toadd = {};
         fluid.data.copyWithPrefix(toadd, leftIndex[key], record.left);
         fluid.data.copyWithPrefix(toadd, rightIndex[key], record.right);
         return toadd;
     });
+    // An array of {dataset, key} for each key demanded in the output column set
     var parsedOutputColumns = fluid.transform(record.outputColumns, fluid.data.parsePrefixedKey);
 
+    // Assemble the core output values from the inner join, by mapping to the final column names the values in "fullJoin"
     var output = fullJoin.map(function (row) {
         return fluid.transform(record.outputColumns, function (inputColumn, outIndex) {
             return {
@@ -206,6 +155,8 @@ fluid.forgivingJoin = function (record, datasets) {
             };
         });
     });
+    // Any any complement (which may be empty, if `outerLeft` was not set in the join record) consisting of rows present in the left record
+    // which don't appear in the join (a "left outer join")
     var leftOutput = leftAddition.map(function (leftKey) {
         return fluid.transform(record.outputColumns, function (inputColumn, outIndex) {
             var parsedKey = parsedOutputColumns[outIndex];
@@ -215,6 +166,8 @@ fluid.forgivingJoin = function (record, datasets) {
             } : {};
         });
     });
+    // Any any complement (which may be empty, if `outerRight` was not set in the join record) consisting of rows present in the left record
+    // which don't appear in the join (a "right outer join")
     var rightOutput = rightAddition.map(function (rightKey) {
         return fluid.transform(record.outputColumns, function (inputColumn, outIndex) {
             var parsedKey = parsedOutputColumns[outIndex];
@@ -229,27 +182,8 @@ fluid.forgivingJoin = function (record, datasets) {
     var fullOutputProvenance = fluid.getMembersDeep(fullOutput, ["dataset"]);
 
     return {
-        output: fullOutputValues,
+        values: fullOutputValues,
         provenance: fullOutputProvenance,
         provenanceMap: datasets
     };
-};
-
-fluid.fileOutput = function (record, datasets, pipeOutputs) {
-    var result = pipeOutputs[record.input];
-    fs.mkdirSync(record.path, { recursive: true });
-
-    fluid.data.writeCSV(path.join(record.path, record.output), result.output);
-    fluid.data.writeCSV(path.join(record.path, record.provenance), result.provenance);
-    fluid.data.writeJSONSync(path.join(record.path, record.provenanceMap), result.provenanceMap);
-};
-
-fluid.data.executePipeline = function (job) {
-    var pipeOutputs = {};
-    fluid.each(job.pipeline, function (onePipe, key) {
-        console.log("Applying pipeline element " + onePipe.type + " for key " + key);
-        // TODO: Turn dataset input themselves into a pipeline element and turn this into some kind of transform chain
-        var result = fluid.invokeGlobalFunction(onePipe.type, [onePipe, job.datasets, pipeOutputs]);
-        pipeOutputs[key] = result;
-    });
 };
