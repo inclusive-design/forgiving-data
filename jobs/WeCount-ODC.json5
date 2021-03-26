@@ -50,7 +50,7 @@
             input: "_",
             // used to read input: "join" - but then when we insert "invent" this was shown brittle - in fact we must default order by sequence
             path: "outputData",
-            output: "output.csv",
+            value: "output.csv",
             provenance: "provenance.csv",
             provenanceMap: "provenanceMap.json"
         }

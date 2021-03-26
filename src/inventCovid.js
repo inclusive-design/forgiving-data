@@ -17,9 +17,9 @@ fluid.covidMap.a11yColumns = [
 ];
 
 fluid.covidMap.inventAccessibilityRow = function (random) {
-    var entries = fluid.covidMap.a11yColumns.map(function (value, key) {
+    var entries = fluid.covidMap.a11yColumns.map(function (value) {
         var rand = random.nextRange(0, 2);
-        return [key, ["no", "yes"][rand]];
+        return [value, ["no", "yes"][rand]];
     });
     return Object.fromEntries(entries);
 };
@@ -31,17 +31,17 @@ fluid.defaults("fluid.covidMap.inventAccessibilityData", {
 });
 
 fluid.covidMap.inventAccessibilityData = function (record, inputMat) {
-    var values = inputMat.values;
+    var value = inputMat.value;
     var random = new fluid.tinyRNG(record.seed);
-    var additionalValues = fluid.transform(values, function (row) {
+    var additionalValues = fluid.transform(value, function (row) {
         var existing = fluid.filterKeys(row, fluid.covidMap.a11yColumns);
         var anySet = Object.values(existing).some(function (element) {
-            return element !== "";
+            return element !== "" && fluid.isValue(element);
         });
         return anySet ? {} : fluid.covidMap.inventAccessibilityRow(random);
     });
     return {
-        values: additionalValues
+        value: additionalValues
         // provenance, provenanceMap filled in by pipeline
     };
 };

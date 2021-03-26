@@ -12,7 +12,6 @@ fluid.data.columnToKeys = function (data, key) {
     return fluid.arrayToHash(column);
 };
 
-// Returns hash of keys to hash of true
 /** Convert a loaded CSV structure to a hash of its columns to a hash of its value space to true
  * @param {CSV} csv - A loaded CSV structure
  * @return {Object<String, Object<String, true>>} A hash of value spaces
@@ -99,9 +98,8 @@ fluid.getMembersDeep = function (holder, path) {
 };
 
 fluid.forgivingJoin = function (record, datasets) {
-    // TODO: datasets should be provided in provenance form also
-    var left = datasets[record.left];
-    var right = datasets[record.right];
+    var left = datasets[record.left].value;
+    var right = datasets[record.right].value;
 
     var leftKeys = fluid.data.dataToKeys(left);
     var rightKeys = fluid.data.dataToKeys(right);
@@ -151,39 +149,44 @@ fluid.forgivingJoin = function (record, datasets) {
         return fluid.transform(record.outputColumns, function (inputColumn, outIndex) {
             return {
                 value: row[inputColumn],
-                dataset: parsedOutputColumns[outIndex].dataset
+                // TODO: Copy over here any component provenenace that we may one day have here
+                provenance: parsedOutputColumns[outIndex].dataset
             };
         });
     });
-    // Any any complement (which may be empty, if `outerLeft` was not set in the join record) consisting of rows present in the left record
+    // Add any complement (which may be empty, if `outerLeft` was not set in the join record) consisting of rows present in the left record
     // which don't appear in the join (a "left outer join")
     var leftOutput = leftAddition.map(function (leftKey) {
         return fluid.transform(record.outputColumns, function (inputColumn, outIndex) {
             var parsedKey = parsedOutputColumns[outIndex];
             return parsedKey.dataset === record.left ? {
                 value: leftIndex[leftKey][parsedKey.key],
-                dataset: parsedKey.dataset
+                provenance: parsedKey.dataset
             } : {};
         });
     });
-    // Any any complement (which may be empty, if `outerRight` was not set in the join record) consisting of rows present in the left record
+    // Add any complement (which may be empty, if `outerRight` was not set in the join record) consisting of rows present in the left record
     // which don't appear in the join (a "right outer join")
     var rightOutput = rightAddition.map(function (rightKey) {
         return fluid.transform(record.outputColumns, function (inputColumn, outIndex) {
             var parsedKey = parsedOutputColumns[outIndex];
             return parsedKey.dataset === record.right ? {
                 value: rightIndex[rightKey][parsedKey.key],
-                dataset: parsedKey.dataset
+                provenance: parsedKey.dataset
             } : {};
         });
     });
     var fullOutput = fluid.flatten([output, leftOutput, rightOutput]);
-    var fullOutputValues = fluid.getMembersDeep(fullOutput, ["value"]);
-    var fullOutputProvenance = fluid.getMembersDeep(fullOutput, ["dataset"]);
+    var fullOutputValue = fluid.getMembersDeep(fullOutput, ["value"]);
+    var fullOutputProvenance = fluid.getMembersDeep(fullOutput, ["provenance"]);
+    var provenanceMap = {
+        [record.left]: fluid.censorKeys(datasets[record.left], ["value", "provenance"]),
+        [record.right]: fluid.censorKeys(datasets[record.right], ["value", "provenance"])
+    };
 
     return {
-        values: fullOutputValues,
+        value: fullOutputValue,
         provenance: fullOutputProvenance,
-        provenanceMap: datasets
+        provenanceMap: provenanceMap
     };
 };
