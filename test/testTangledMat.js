@@ -32,7 +32,7 @@ jqUnit.test("Test basic mat with proxies", function () {
 });
 
 jqUnit.test("Test mat with compound provenance without proxies", function () {
-    var mat = fluid.tangledMat([{
+    var compoundLayer = fluid.freezeRecursive({
         value: [{
             a: 1,
             b: 2
@@ -42,15 +42,16 @@ jqUnit.test("Test mat with compound provenance without proxies", function () {
             b: "extend"
         }],
         name: "compound"
-    }, {
+    });
+    var overlayLayer = fluid.freezeRecursive({
         value: [{
             c: 3
         }, {
             d: 4
         }],
         name: "overlay"
-    }
-    ]);
+    });
+    var mat = fluid.tangledMat([compoundLayer, overlayLayer]);
     var expectedValue = [{
         a: 1,
         b: 2,
@@ -65,6 +66,43 @@ jqUnit.test("Test mat with compound provenance without proxies", function () {
     }, {
         d: "overlay"
     }];
+    mat.evaluateFully([]);
+    jqUnit.assertDeepEq("Expected evaluation", expectedValue, mat.getRoot());
+    jqUnit.assertDeepEq("Expected provenance", expectedProvenance, mat.getProvenance()); 
+});
+
+jqUnit.test("Test mat with shared values without proxies", function () {
+    var baseLayer = fluid.freezeRecursive({
+        value: {
+            a: 1,
+            b: 2
+        },
+        name: "base"
+    });
+    var extendLayer = fluid.freezeRecursive({
+        value: {
+            a: 3,
+            c: {
+               d: 4
+            }
+        },
+        name: "extend"
+    });
+    var mat = fluid.tangledMat([baseLayer, extendLayer]);
+    var expectedValue = {
+        a: 3,
+        b: 2,
+        c: {
+            d: 4
+        }
+    };
+    var expectedProvenance = {
+        a: "extend",
+        b: "base",
+        c: { 
+            d: "extend"
+        }
+    };
     mat.evaluateFully([]);
     jqUnit.assertDeepEq("Expected evaluation", expectedValue, mat.getRoot());
     jqUnit.assertDeepEq("Expected provenance", expectedProvenance, mat.getProvenance()); 

@@ -174,7 +174,8 @@ fluid.tangledMat.checkConsistency = function () {
     fluid.each(cell.value, function (subValue, key) {
         var subCell = root[key];
         if (subCell) {
-            if (subCell[$m].value !== subValue) {
+            var subCellValue = subCell[$m] ? subCell[$m].value : subCell.value;
+            if (subCellValue !== subValue) {
                 fluid.fail("Failure at key ", key, " value from root has ", subValue, " whereas value from subcell has ", subCell[$m].value);
             }
         }

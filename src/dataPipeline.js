@@ -97,6 +97,22 @@ fluid.defaults("fluid.fileOutput", {
     gradeNames: "fluid.simpleInputPipe"
 });
 
+/**
+ * A layer structure as stored within a fluid.tangledMat.
+ * @typedef {Object} ProvenancedTable
+ * @property {Object<String, String>[]} value - Array of CSV row values
+ * @property {Object<String, String>[]} provenanceMap - Isomorphic to `value - an array of provenance records for each row
+ * @property {Object} provenanceMap A map of provenance strings to records resolving the provenance - either a dataset record or another pipeline record
+ */
+
+/** A pipeline entry which outputs a provenance record to a grouped set of files
+ * @param {Object} record - The pipeline element's record in the configuration, including members
+ *     {String} `path` holding the directory where the files are to be written
+ *     {String} `value` holding the filename within `path` where the data is to be written as CSV
+ *     {String} `provenance` holding the filename within `path` where the provenance data is to be written as CSV
+ *     {String} `provenenceMap` holding the filename within `path` where the map of provenance strings to records  is to be written as JSON
+ * @param {ProvenancedTable} result - The data to be written
+ */
 fluid.fileOutput = function (record, result) {
     fs.mkdirSync(record.path, { recursive: true });
 

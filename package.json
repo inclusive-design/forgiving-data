@@ -22,6 +22,6 @@
         "eslint": "7.20.0",
         "eslint-config-fluid": "2.0.0",
         "fluid-lint-all": "1.0.4",
-        "node-jqunit": "1.1.8"
+        "node-jqunit": "1.1.9"
     }
 }

@@ -19,7 +19,7 @@ fluid.covidMap.a11yColumns = [
 fluid.covidMap.inventAccessibilityRow = function (random) {
     var entries = fluid.covidMap.a11yColumns.map(function (value) {
         var rand = random.nextRange(0, 2);
-        return [value, ["no", "yes"][rand]];
+        return [value, ["No", "Yes"][rand]];
     });
     return Object.fromEntries(entries);
 };
