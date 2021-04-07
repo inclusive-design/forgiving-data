@@ -133,7 +133,13 @@ Pipeline elements available include
 #### fluid.forgivingJoin
 
 Executes an [inner](https://en.wikipedia.org/wiki/Join_(SQL)#Inner_join) or
-[outer join](https://en.wikipedia.org/wiki/Join_(SQL)#Outer_join) given two CSV structures
+[outer join](https://en.wikipedia.org/wiki/Join_(SQL)#Outer_join) given two CSV structures.
+This join chooses a single best pair of columns to join on based on a simple
+value space intersection performed over all pairs of columns in the provided tables.
+An improvement to this algorithm, with increased computational cost, would be
+able to select a compound column for the join, as well as providing a ranked
+list of choices rather than just a single best choice - these improvements
+are ticketed at [DATA-1](https://issues.fluidproject.org/browse/DATA-1).
 
 #### fluid.fileOutput
 
