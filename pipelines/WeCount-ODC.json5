@@ -9,14 +9,26 @@
         ODC: {
             sourceType: "git",
             repository: "https://github.com/inclusive-design/covid-assessment-centres",
-            path: "ODC/assessment_centre_locations_2021_02_10.csv" // interpolate from "latest" - invent JSON-R
+            path: "ODC/assessment_centre_locations_2021_02_10.csv" 
         }
     },
-    pipeline: {
-        join: {
+    elements: {
+        WeCount: {
+            type: "fluid.fetchGitCSV",
+            repoOwner: "inclusive-design",
+            repoName: "covid-assessment-centres",
+            path: "WeCount/assessment_centre_data_collection_2020_09_02.csv",
+        },
+        ODC: {
+            type: "fluid.fetchGitCSV",
+            repoOwner: "inclusive-design",
+            repoName: "covid-assessment-centres",
+            path: "ODC/assessment_centre_locations_2021_02_10.csv", // interpolate from "latest" - invent JSON-R
+        },
+        joined: {
             type: "fluid.forgivingJoin",
-            left: "WeCount",
-            right: "ODC",
+            left: "{WeCount}.data",
+            right: "{ODC}.data",
             outerRight: true,
             outputColumns: {
                 location_name: "ODC.location_name",
@@ -39,20 +51,6 @@
                 "Individual Service":   "WeCount.Personalized or individual service is offered",
                 "Wait Accommodations":  "WeCount.Queue accomodations"
             }
-        },
-        invent: {
-            type: "fluid.covidMap.inventAccessibilityData",
-            input: "_",
-            seed: 0
-        },
-        output: {
-            type: "fluid.fileOutput",
-            input: "_",
-            // used to read input: "join" - but then when we insert "invent" this was shown brittle - in fact we must default order by sequence
-            path: "outputData",
-            value: "output.csv",
-            provenance: "provenance.csv",
-            provenanceMap: "provenanceMap.json"
         }
     }
 }

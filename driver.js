@@ -4,9 +4,9 @@ var fluid = require("infusion");
 
 require("./index.js");
 
-var job = fluid.data.loadJob("%forgiving-data/jobs/WeCount-ODC.json5", "%forgiving-data/data");
+var pipeline = fluid.data.loadPipeline("%forgiving-data/jobs/WeCount-ODC.json5", "%forgiving-data/data");
 
-job.then(function (result) {
+pipeline.then(function (result) {
     console.log("Data loaded successfully");
     fluid.data.executePipeline(result);
 }, function (err) {

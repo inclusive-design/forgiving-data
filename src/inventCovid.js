@@ -30,9 +30,9 @@ fluid.defaults("fluid.covidMap.inventAccessibilityData", {
     gradeNames: "fluid.selfProvenancePipe"
 });
 
-fluid.covidMap.inventAccessibilityData = function (record, inputMat) {
-    var value = inputMat.value;
-    var random = new fluid.tinyRNG(record.seed);
+fluid.covidMap.inventAccessibilityData = function (options) {
+    var value = options.input.value;
+    var random = new fluid.tinyRNG(options.seed);
     var additionalValues = fluid.transform(value, function (row) {
         var existing = fluid.filterKeys(row, fluid.covidMap.a11yColumns);
         var anySet = Object.values(existing).some(function (element) {

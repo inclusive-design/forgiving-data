@@ -1,0 +1,16 @@
+{
+    type: "fluid.pipelines.WeCount-ODC-synthetic",
+    parents: "fluid.pipelines.WeCount-ODC",
+    elements: {
+        joined: {
+            type: "fluid.compoundElement",
+            elements: {
+                invent: {
+                    type: "fluid.covidMap.inventAccessibilityData",
+                    input: "{joined}.data",
+                    seed: 0
+                }
+            }
+        }
+    }
+}
