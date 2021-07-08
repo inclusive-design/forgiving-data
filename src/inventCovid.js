@@ -27,7 +27,7 @@ fluid.covidMap.inventAccessibilityRow = function (random) {
 
 
 fluid.defaults("fluid.covidMap.inventAccessibilityData", {
-    gradeNames: "fluid.selfProvenancePipe"
+    gradeNames: "fluid.overlayProvenancePipe"
 });
 
 fluid.covidMap.inventAccessibilityData = function (options) {

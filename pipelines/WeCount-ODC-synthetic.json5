@@ -10,7 +10,8 @@
                     input: "{joined}.data",
                     seed: 0
                 }
-            }
+            },
+            return: "invent"
         }
     }
 }

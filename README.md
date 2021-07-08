@@ -7,10 +7,14 @@ maintaining rather than effacing provenance.
 
 ## How to use it?
 
-This is very early-stage work. The file [jobs/WeCount-ODC.json5](jobs/WeCount-ODC.json5) contains a very simple three-element
-data pipeline which will check out git repositories to use as inputs for a "forgiving data merge".
+This is very early-stage work. The file [pipelines/WeCount-ODC.json5](jobs/WeCount-ODC.json5) contains a very simple three-element
+data pipeline which loads two CSV files from git repositories to use as inputs for a "forgiving data merge".
 Merged outputs together with provenance information linking back to the source data will be written
-into directory `dataOutput`.
+into directory `dataOutput` by means of the overlay pipe [pipelines/WeCount-ODC-fileOutput.json5](jobs/WeCount-ODC-fileOutput.json5).
+Pipeline [pipelines/WeCount-ODC-synthetic.json5](jobs/WeCount-ODC-synthetic.json5) interposes into these pipelines via
+an open composition process to interpolate synthetic accessibility data into the joined dataset, whilst recording
+into the provenance file that this data is synthetic --- any genuine data resulting from the join is preserved,
+along with noting its provenance as genuine.
 
 Run the sample pipeline by running
 
@@ -111,22 +115,18 @@ The pipeline is configured by a JSON5 structure with top-level elements
 
 ````text
 {
-    type {String} The name of the overall pipeline (will eventually become a grade name of some sort) 
+    type {String} The name of the overall pipeline - a grade name
+    parents {String|String[]} Any parent pipelines that this pipeline should be composited together with
      
-    datasets: { // Free hash of dataset structures each with elements
-        sourceType: "git", (currently the only supported type)
-        repository: <git repository URL, e.g. "https://github.com/inclusive-design/covid-assessment-centres">
-        path: <String path within the repository, e.g. "WeCount/assessment_centre_data_collection_2020_09_02.csv">
-    },
-
-    pipeline: { // Free hash of pipeline elements with elements
+    elements: { // Free hash of pipeline elements
         type: <String - global function name>
+        parents: <String|String[] - parent element grades>
         <other type-dependent properties>
     }
 }
 ````
 
-An example pipeline can be seen at [WeCount-ODC.json5](./jobs/WeCount-ODC.json5).
+An example pipeline can be seen at [WeCount-ODC.json5](./pipelines/WeCount-ODC.json5).
 
 Pipeline elements available include
 
@@ -170,16 +170,18 @@ synthesizes accessibility data as part of the sample `driver.js` pipeline.
 
 #### Loading and running the pipeline
 
-The pipeline structure is loaded by using `fluid.data.loadJob` and then executed via `fluid.executeJob` as per the
-sample in `driver.js` - e.g.
+The pipeline structure is loaded by using `fluid.data.loadAllPipelines` and then executed via `fluid.data.loadPipeline`
+as per the sample in `driver.js` - e.g.
 
 ````javascript
-var job = fluid.data.loadJob("%forgiving-data/jobs/WeCount-ODC.json5", "%forgiving-data/data");
+fluid.data.loadAllPipelines("%forgiving-data/pipelines");
 
-job.then(function (result) {
-    console.log("Data loaded successfully");
-    fluid.data.executePipeline(result);
+var pipeline = fluid.data.loadPipeline(["fluid.pipelines.WeCount-ODC-synthetic", "fluid.pipelines.WeCount-ODC-fileOutput"]);
+
+pipeline.completionPromise.then(function (result) {
+    console.log("Pipeline executed successfully");
 }, function (err) {
-    console.log("Data loading error", err);
+    console.log("Pipeline execution error", err);
 });
+
 ````

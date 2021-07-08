@@ -97,9 +97,11 @@ fluid.getMembersDeep = function (holder, path) {
     });
 };
 
-fluid.forgivingJoin = function (record, datasets) {
-    var left = datasets[record.left].value;
-    var right = datasets[record.right].value;
+fluid.forgivingJoin = function (options) {
+    var left = options.left.value;
+    var right = options.right.value;
+    var leftName = options.left.provenance;
+    var rightName = options.right.provenance;
 
     var leftKeys = fluid.data.dataToKeys(left);
     var rightKeys = fluid.data.dataToKeys(right);
@@ -117,7 +119,7 @@ fluid.forgivingJoin = function (record, datasets) {
         return intb.count - inta.count;
     });
     var best = intersects[0];
-    console.log("Best join columns - left : " + record.left + "." + best.leftKey + " and right: " + record.right + "." + best.rightKey + ": count " + best.count);
+    console.log("Best join columns - left : " + leftName + "." + best.leftKey + " and right: " + rightName + "." + best.rightKey + ": count " + best.count);
     var leftHash = leftKeys[best.leftKey];
     console.log("Left complement: " + (Object.keys(leftHash).length - best.count));
     var rightHash = rightKeys[best.rightKey];
@@ -126,10 +128,10 @@ fluid.forgivingJoin = function (record, datasets) {
     var leftComplement = Object.keys(fluid.data.intersect(leftHash, best.keys, true).keys);
     var rightComplement = Object.keys(fluid.data.intersect(rightHash, best.keys, true).keys);
 
-    var leftAddition = record.outerLeft ? leftComplement : [];
+    var leftAddition = options.outerLeft ? leftComplement : [];
     console.log((leftAddition.length ? "Retaining " : "Discarding ") + leftComplement.length + " left keys:\n ", leftComplement.join("\n  "));
 
-    var rightAddition = record.outerRight ? rightComplement : [];
+    var rightAddition = options.outerRight ? rightComplement : [];
     console.log((rightAddition.length ? "Retaining " : "Discarding ") + rightComplement.length + " right keys:\n ", rightComplement.join("\n  "));
 
     var leftIndex = fluid.data.indexByColumn(left.data, best.leftKey);
@@ -137,19 +139,19 @@ fluid.forgivingJoin = function (record, datasets) {
     // Assemble the "full join" structure containing all prefixed keys mapped over all rows which are in common (the inner join core)
     var fullJoin = Object.keys(best.keys).map(function (key) {
         var toadd = {};
-        fluid.data.copyWithPrefix(toadd, leftIndex[key], record.left);
-        fluid.data.copyWithPrefix(toadd, rightIndex[key], record.right);
+        fluid.data.copyWithPrefix(toadd, leftIndex[key], leftName);
+        fluid.data.copyWithPrefix(toadd, rightIndex[key], rightName);
         return toadd;
     });
     // An array of {dataset, key} for each key demanded in the output column set
-    var parsedOutputColumns = fluid.transform(record.outputColumns, fluid.data.parsePrefixedKey);
+    var parsedOutputColumns = fluid.transform(options.outputColumns, fluid.data.parsePrefixedKey);
 
     // Assemble the core output values from the inner join, by mapping to the final column names the values in "fullJoin"
     var output = fullJoin.map(function (row) {
-        return fluid.transform(record.outputColumns, function (inputColumn, outIndex) {
+        return fluid.transform(options.outputColumns, function (inputColumn, outIndex) {
             return {
                 value: row[inputColumn],
-                // TODO: Copy over here any component provenenace that we may one day have here
+                // TODO: Copy over here any component provenance that we may one day have here
                 provenance: parsedOutputColumns[outIndex].dataset
             };
         });
@@ -157,9 +159,9 @@ fluid.forgivingJoin = function (record, datasets) {
     // Add any complement (which may be empty, if `outerLeft` was not set in the join record) consisting of rows present in the left record
     // which don't appear in the join (a "left outer join")
     var leftOutput = leftAddition.map(function (leftKey) {
-        return fluid.transform(record.outputColumns, function (inputColumn, outIndex) {
+        return fluid.transform(options.outputColumns, function (inputColumn, outIndex) {
             var parsedKey = parsedOutputColumns[outIndex];
-            return parsedKey.dataset === record.left ? {
+            return parsedKey.dataset === leftName ? {
                 value: leftIndex[leftKey][parsedKey.key],
                 provenance: parsedKey.dataset
             } : {};
@@ -168,9 +170,9 @@ fluid.forgivingJoin = function (record, datasets) {
     // Add any complement (which may be empty, if `outerRight` was not set in the join record) consisting of rows present in the left record
     // which don't appear in the join (a "right outer join")
     var rightOutput = rightAddition.map(function (rightKey) {
-        return fluid.transform(record.outputColumns, function (inputColumn, outIndex) {
+        return fluid.transform(options.outputColumns, function (inputColumn, outIndex) {
             var parsedKey = parsedOutputColumns[outIndex];
-            return parsedKey.dataset === record.right ? {
+            return parsedKey.dataset === rightName ? {
                 value: rightIndex[rightKey][parsedKey.key],
                 provenance: parsedKey.dataset
             } : {};
@@ -180,8 +182,8 @@ fluid.forgivingJoin = function (record, datasets) {
     var fullOutputValue = fluid.getMembersDeep(fullOutput, ["value"]);
     var fullOutputProvenance = fluid.getMembersDeep(fullOutput, ["provenance"]);
     var provenanceMap = {
-        [record.left]: fluid.censorKeys(datasets[record.left], ["value", "provenance"]),
-        [record.right]: fluid.censorKeys(datasets[record.right], ["value", "provenance"])
+        [leftName]: options.left.provenanceMap[leftName],
+        [rightName]: options.right.provenanceMap[rightName]
     };
 
     return {
