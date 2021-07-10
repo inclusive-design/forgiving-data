@@ -4,7 +4,7 @@
 
 var fluid = require("infusion");
 
-require("./tinyRNG.js");
+fluid.require("%forgiving-data/src/tinyRNG.js");
 
 fluid.registerNamespace("fluid.covidMap");
 

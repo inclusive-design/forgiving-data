@@ -4,7 +4,8 @@ var fluid = require("infusion");
 
 require("./index.js");
 
-fluid.data.loadAllPipelines("%forgiving-data/pipelines");
+fluid.require("%forgiving-data/demo/pipes/inventCovid.js");
+fluid.data.loadAllPipelines("%forgiving-data/demo/pipelines");
 
 var pipeline = fluid.data.loadPipeline(["fluid.pipelines.WeCount-ODC-synthetic", "fluid.pipelines.WeCount-ODC-fileOutput"]);
 

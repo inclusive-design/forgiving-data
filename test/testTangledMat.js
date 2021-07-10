@@ -28,7 +28,7 @@ jqUnit.test("Test basic mat with proxies", function () {
     }];
     jqUnit.assertDeepEq("Expected provenance map", expected, provenance);
     jqUnit.assertDeepEq("Base layer uncorrupted",   [{a: 1}], baseLayer);
-    jqUnit.assertDeepEq("Extend layer uncorrupted", [{b: 2}], extendLayer);    
+    jqUnit.assertDeepEq("Extend layer uncorrupted", [{b: 2}], extendLayer);
 });
 
 jqUnit.test("Test mat with compound provenance without proxies", function () {
@@ -68,7 +68,7 @@ jqUnit.test("Test mat with compound provenance without proxies", function () {
     }];
     mat.evaluateFully([]);
     jqUnit.assertDeepEq("Expected evaluation", expectedValue, mat.getRoot());
-    jqUnit.assertDeepEq("Expected provenance", expectedProvenance, mat.getProvenance()); 
+    jqUnit.assertDeepEq("Expected provenance", expectedProvenance, mat.getProvenance());
 });
 
 jqUnit.test("Test mat with shared values without proxies", function () {
@@ -83,7 +83,7 @@ jqUnit.test("Test mat with shared values without proxies", function () {
         value: {
             a: 3,
             c: {
-               d: 4
+                d: 4
             }
         },
         name: "extend"
@@ -99,11 +99,11 @@ jqUnit.test("Test mat with shared values without proxies", function () {
     var expectedProvenance = {
         a: "extend",
         b: "base",
-        c: { 
+        c: {
             d: "extend"
         }
     };
     mat.evaluateFully([]);
     jqUnit.assertDeepEq("Expected evaluation", expectedValue, mat.getRoot());
-    jqUnit.assertDeepEq("Expected provenance", expectedProvenance, mat.getProvenance()); 
+    jqUnit.assertDeepEq("Expected provenance", expectedProvenance, mat.getProvenance());
 });
