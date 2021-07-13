@@ -11,7 +11,7 @@ var octokit = new octokitCore.Octokit({
 //  auth: access_token
 });
 
-var gitOpsApi = require("data-update-github");
+var gitOpsApi = require("git-ops-api");
 
 require("./readJSON.js");
 require("./settleStructure.js");
@@ -42,6 +42,7 @@ fluid.defaults("fluid.overlayProvenancePipe", {
 });
 
 // A pipe which contributes a simple, uniform provenance record covering all its output - e.g. a file loader
+// Currently disused - fluid.fetchGitCSV fills in its own provenance
 fluid.defaults("fluid.selfProvenancePipe", {
     gradeNames: "fluid.dataPipe"
 });
@@ -223,6 +224,7 @@ fluid.isParentComponent = function (parent, child) {
 fluid.dataPipeWrapper.computeWaitSet = function (that) {
     var waitSet = [];
     that.provenanceRecord = fluid.data.findWaitSet(that.options.innerOptions, waitSet, []);
+    that.provenanceRecord.type = that.options.innerType;
     that.waitSet = waitSet;
     var waitCompletions = fluid.transform(waitSet, function (oneWait) {
         var resolved = fluid.resolveContext(oneWait.parsed.context, that);
@@ -266,31 +268,33 @@ fluid.data.pathWithinPipeline = function (that) {
 /** Interprets the result from a `fluid.dataPipe` function by looking up a suitable algorithm from its grade content
  * (currently `fluid.overlayProvenancePipe` and `fluid.selfProvenancePipe` are recognised.
  * @param {ProvenancedTable} result - A (possibly incomplete) provenanced tabular value
+ * @param {String} provenanceKey - The provenenace key assigned to the pipe
+ * @param {Object} options - The argument set to the pipe
  * @param {fluid.dataPipeWrapper} that - The component wrapping the pipe - its `innerType` record will be used to look up
  * a resolution algorithm.
  * @return {ProvenancedTable} A more completely filled out provenanced value
  */
-fluid.dataPipeWrapper.interpretPipeResult = function (result, that) {
+fluid.dataPipeWrapper.interpretPipeResult = function (result, provenanceKey, options, that) {
 
     var upDefaults = fluid.defaults(that.options.innerType);
-    var provenanceName = fluid.data.pathWithinPipeline(that).join(".");
 
     if (fluid.hasGrade(upDefaults, "fluid.overlayProvenancePipe")) {
-        var input = that.options.innerOptions.input;
+        var input = options.input;
 
         var mat = fluid.tangledMat([input, {
             value: result.value,
-            name: provenanceName
+            name: provenanceKey
         }], true);
         result.value = mat.evaluateFully([]);
         result.provenance = mat.getProvenance();
+        result.provenanceKey = provenanceKey;
         result.provenanceMap = fluid.extend({}, input.provenanceMap, {
-            [provenanceName]: that.provenanceRecord
+            [provenanceKey]: that.provenanceRecord
         });
     } else if (fluid.hasGrade(upDefaults, "fluid.selfProvenancePipe")) {
-        result.provenance = provenanceName;
+        result.provenance = provenanceKey; // TODO: Abbreviated provenenance would currently only be interpreted by tangledMap
         result.provenanceMap = {
-            [provenanceName]: that.provenanceRecord
+            [provenanceKey]: that.provenanceRecord
         };
     }
     return result;
@@ -308,11 +312,14 @@ fluid.dataPipeWrapper.launch = function (that) {
         var fetched = fluid.get(oneWait.target, oneWait.parsed.path);
         fluid.set(overlay, oneWait.path, fetched);
     });
+    var provenanceKey = fluid.data.pathWithinPipeline(that).join(".");
     var expanded = fluid.extend(true, {}, that.options.innerOptions, overlay);
+    expanded.provenanceKey = provenanceKey;
+    expanded.provenanceRecord = that.provenanceRecord;
     var result = fluid.invokeGlobalFunction(that.options.innerType, [expanded]);
     var promise = fluid.toPromise(result);
     var promiseTogo = fluid.promise.map(promise, function (value) {
-        return fluid.dataPipeWrapper.interpretPipeResult(value, that);
+        return fluid.dataPipeWrapper.interpretPipeResult(value, provenanceKey, expanded, that);
     });
     fluid.promise.follow(promiseTogo, that.completionPromise);
 };
@@ -472,9 +479,16 @@ fluid.data.loadPipeline = function (types) {
     return that;
 };
 
+fluid.data.flatProvenance = function (data, provenanceKey) {
+    return fluid.transform(data, function (row) {
+        return fluid.transform(row, function () {
+            return provenanceKey;
+        });
+    });
+};
 
 fluid.defaults("fluid.fetchGitCSV", {
-    gradeNames: "fluid.selfProvenancePipe"
+    gradeNames: "fluid.dataPipe"
 });
 
 //(from gitOpsApi.js)
@@ -497,8 +511,17 @@ fluid.fetchGitCSV = async function (options) {
     var commonOptions = fluid.filterKeys(options, ["repoOwner", "repoName", "filePath", "branchName"]);
     var result = await gitOpsApi.fetchRemoteFile(octokit, commonOptions);
     var parsed = await fluid.resourceLoader.parsers.csv(result.content, {resourceSpec: {}});
+    var commitInfo = await gitOpsApi.getFileLastCommit(octokit, commonOptions);
+    var provenanceKey = options.provenanceKey;
     return {
-        value: parsed
+        value: parsed,
+        provenance: fluid.data.flatProvenance(parsed.data, provenanceKey),
+        provenanceKey: provenanceKey,
+        provenanceMap: {
+            [options.provenanceKey]: fluid.extend(true, {}, options.provenanceRecord, {
+                commitInfo: commitInfo
+            })
+        }
     };
 };
 

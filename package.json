@@ -15,7 +15,7 @@
         "kettle": "2.2.0",
         "rimraf": "3.0.2",
         "json5": "2.2.0",
-        "data-update-github": "0.1.0",
+        "git-ops-api": "1.0.0",
         "@octokit/core": "3.5.1",
         "papaparse": "5.3.1"
     },

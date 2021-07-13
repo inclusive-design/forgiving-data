@@ -100,8 +100,8 @@ fluid.getMembersDeep = function (holder, path) {
 fluid.forgivingJoin = function (options) {
     var left = options.left.value;
     var right = options.right.value;
-    var leftName = options.left.provenance;
-    var rightName = options.right.provenance;
+    var leftName = options.left.provenanceKey;
+    var rightName = options.right.provenanceKey;
 
     var leftKeys = fluid.data.dataToKeys(left);
     var rightKeys = fluid.data.dataToKeys(right);
@@ -151,7 +151,7 @@ fluid.forgivingJoin = function (options) {
         return fluid.transform(options.outputColumns, function (inputColumn, outIndex) {
             return {
                 value: row[inputColumn],
-                // TODO: Copy over here any component provenance that we may one day have here
+                // TODO: Copy over here the compound provenance from options.left/right.provenance
                 provenance: parsedOutputColumns[outIndex].dataset
             };
         });
@@ -187,7 +187,10 @@ fluid.forgivingJoin = function (options) {
     };
 
     return {
-        value: fullOutputValue,
+        value: {
+            headers: Object.keys(options.outputColumns),
+            data: fullOutputValue
+        },
         provenance: fullOutputProvenance,
         provenanceMap: provenanceMap
     };
