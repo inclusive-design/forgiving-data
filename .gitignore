@@ -23,10 +23,6 @@ build/Release
 node_modules/
 jspm_packages/
 
-# Our work directory
-
-data/
-
 # Our sample outputs
 
 outputData/

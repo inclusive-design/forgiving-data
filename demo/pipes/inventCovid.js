@@ -31,9 +31,9 @@ fluid.defaults("fluid.covidMap.inventAccessibilityData", {
 });
 
 fluid.covidMap.inventAccessibilityData = function (options) {
-    var value = options.input.value.data;
+    var rows = options.input.value.data;
     var random = new fluid.tinyRNG(options.seed);
-    var additionalValues = fluid.transform(value, function (row) {
+    var additionalValues = fluid.transform(rows, function (row) {
         var existing = fluid.filterKeys(row, fluid.covidMap.a11yColumns);
         var anySet = Object.values(existing).some(function (element) {
             return element !== "" && fluid.isValue(element);

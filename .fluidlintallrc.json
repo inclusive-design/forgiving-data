@@ -1,9 +1,9 @@
 {
     "sources": {
         "md":    [ "./*.md","./docs/**/*.md"],
-        "js":    ["./src/**/*.js", "./test/**/*.js", "./demo/**/*.js", "./*.js"],
-        "json":  ["./src/**/*.json", "test/**/*.json", "./demo/**/*.json", "./*.json"],
-        "json5": ["./src/**/*.json5", "test/**/*.json5", "./demo/**/*.json5", "./*.json5"],
+        "js":    ["./src/**/*.js", "./tests/**/*.js", "./demo/**/*.js", "./*.js"],
+        "json":  ["./src/**/*.json", "tests/**/*.json", "./demo/**/*.json", "./*.json"],
+        "json5": ["./src/**/*.json5", "tests/**/*.json5", "./demo/**/*.json5", "./*.json5"],
         "other": ["./.*"]
     },
     "markdownlint": {

@@ -1,0 +1,29 @@
+{
+    type: "fluid.tests.pipelines.fetchAndJoin",
+    elements: {
+        left: {
+            type: "fluid.fetchGitCSV",
+            repoOwner: "inclusive-design",
+            repoName: "forgiving-data-test-data",
+            filePath: "joinLeft.csv"
+        },
+        right: {
+            type: "fluid.fetchGitCSV",
+            repoOwner: "inclusive-design",
+            repoName: "forgiving-data-test-data",
+            filePath: "joinRight.csv"
+        },
+        joined: {
+            type: "fluid.forgivingJoin",
+            left: "{left}.data",
+            right: "{right}.data",
+            outputColumns: {
+                observationID: "left.ID",
+                taxonID: "right.taxonID",
+                observationDate: "left.Date",
+                taxonName: "right.scientificName",
+                vernacularName: "right.vernacularName"
+            }
+        }
+    }
+}

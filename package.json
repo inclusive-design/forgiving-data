@@ -1,11 +1,11 @@
 {
     "name": "forgiving-data",
-    "version": "0.2.1",
+    "version": "0.3.0",
     "description": "Algorithms for processing and relating data in ways which promote ownership, representation and inclusion, maintaining rather than effacing provenance",
     "main": "index.js",
     "scripts": {
         "lint": "fluid-lint-all",
-        "test": "node test/testTangledMat.js"
+        "test": "node tests/all-tests.js"
     },
     "author": "Inclusive Design Research Centre",
     "license": "BSD-3-Clause",

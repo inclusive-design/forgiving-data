@@ -267,7 +267,7 @@ fluid.data.pathWithinPipeline = function (that) {
 
 /** Interprets the result from a `fluid.dataPipe` function by looking up a suitable algorithm from its grade content
  * (currently `fluid.overlayProvenancePipe` and `fluid.selfProvenancePipe` are recognised.
- * @param {ProvenancedTable} result - A (possibly incomplete) provenanced tabular value
+ * @param {ProvenancedTable} result - A (possibly incomplete) provenanced tabular value **This will be modified by the action of this function**
  * @param {String} provenanceKey - The provenenace key assigned to the pipe
  * @param {Object} options - The argument set to the pipe
  * @param {fluid.dataPipeWrapper} that - The component wrapping the pipe - its `innerType` record will be used to look up
@@ -281,11 +281,18 @@ fluid.dataPipeWrapper.interpretPipeResult = function (result, provenanceKey, opt
     if (fluid.hasGrade(upDefaults, "fluid.overlayProvenancePipe")) {
         var input = options.input;
 
-        var mat = fluid.tangledMat([input, {
-            value: result.value,
+        var mat = fluid.tangledMat([{
+            value: input.value.data,
+            provenance: input.provenance,
+            name: "input"}, {
+            value: result.value.data,
             name: provenanceKey
         }], true);
-        result.value = mat.evaluateFully([]);
+        result.value = {
+            data: mat.evaluateFully([]),
+            headers: input.value.headers
+        };
+        console.log("Overlay value ", result.value);
         result.provenance = mat.getProvenance();
         result.provenanceKey = provenanceKey;
         result.provenanceMap = fluid.extend({}, input.provenanceMap, {
@@ -430,7 +437,7 @@ fluid.data.upgradeElements = function (layers, currentLayer, path) {
 
 /** Given an array of element definitions, resolve their fully merged structure by means of STRUCTURAL PROMOTION
  * @param {Object[]} layers - Array of unmerged element definitions
- * @return {Object} A merged hash of element definitions, also convered into standard Infusion grade definitions
+ * @return {Object} A merged hash of element definitions, also converted into standard Infusion grade definitions
  */
 fluid.data.mergeElements = function (layers) {
     // Elements on the left composite on top of elements to the right
@@ -501,6 +508,7 @@ fluid.defaults("fluid.fetchGitCSV", {
  * @param {String} filePath - The location of the file including the path and the file name.
  */
 
+// TODO: Refactor this as a DataSource + CSV decoder + provenance decoder, and produce a dedicated dataSourceDataPipe component
 /** A function fetching a single CSV file from a GitHub repository URL. It will be returned as a barebones
  * `ProvenancedTable` with just a value. The provenance will be assumed to be filled in by the loader, e.g.
  * fluid.dataPipeWrapper
@@ -542,6 +550,9 @@ fluid.fileOutput = function (options) {
     var input = options.input;
 
     fluid.data.writeCSV(path.join(options.path, options.value), input.value);
-    fluid.data.writeCSV(path.join(options.path, options.provenance), input.provenance);
+    fluid.data.writeCSV(path.join(options.path, options.provenance), {
+        headers: input.value.headers,
+        data: input.provenance
+    });
     fluid.data.writeJSONSync(path.join(options.path, options.provenanceMap), input.provenanceMap);
 };
