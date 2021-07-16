@@ -4,11 +4,13 @@ var fluid = require("infusion");
 
 require("./index.js");
 
-var job = fluid.data.loadJob("%forgiving-data/jobs/WeCount-ODC.json5", "%forgiving-data/data");
+fluid.require("%forgiving-data/demo/pipes/inventCovid.js");
+fluid.data.loadAllPipelines("%forgiving-data/demo/pipelines");
 
-job.then(function (result) {
-    console.log("Data loaded successfully");
-    fluid.data.executePipeline(result);
+var pipeline = fluid.data.loadPipeline(["fluid.pipelines.WeCount-ODC-synthetic", "fluid.pipelines.WeCount-ODC-fileOutput"]);
+
+pipeline.completionPromise.then(function () {
+    console.log("Pipeline executed successfully");
 }, function (err) {
-    console.log("Data loading error", err);
+    console.log("Pipeline execution error", err);
 });

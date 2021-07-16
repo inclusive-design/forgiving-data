@@ -4,7 +4,7 @@
 
 var fluid = require("infusion");
 
-require("./tinyRNG.js");
+fluid.require("%forgiving-data/src/tinyRNG.js");
 
 fluid.registerNamespace("fluid.covidMap");
 
@@ -27,13 +27,13 @@ fluid.covidMap.inventAccessibilityRow = function (random) {
 
 
 fluid.defaults("fluid.covidMap.inventAccessibilityData", {
-    gradeNames: "fluid.selfProvenancePipe"
+    gradeNames: "fluid.overlayProvenancePipe"
 });
 
-fluid.covidMap.inventAccessibilityData = function (record, inputMat) {
-    var value = inputMat.value;
-    var random = new fluid.tinyRNG(record.seed);
-    var additionalValues = fluid.transform(value, function (row) {
+fluid.covidMap.inventAccessibilityData = function (options) {
+    var rows = options.input.value.data;
+    var random = new fluid.tinyRNG(options.seed);
+    var additionalValues = fluid.transform(rows, function (row) {
         var existing = fluid.filterKeys(row, fluid.covidMap.a11yColumns);
         var anySet = Object.values(existing).some(function (element) {
             return element !== "" && fluid.isValue(element);
@@ -41,7 +41,10 @@ fluid.covidMap.inventAccessibilityData = function (record, inputMat) {
         return anySet ? {} : fluid.covidMap.inventAccessibilityRow(random);
     });
     return {
-        value: additionalValues
+        value: {
+            headers: options.input.value.headers,
+            data: additionalValues
+        }
         // provenance, provenanceMap filled in by pipeline
     };
 };

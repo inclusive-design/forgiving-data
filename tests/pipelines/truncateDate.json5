@@ -1,0 +1,15 @@
+{
+    type: "fluid.tests.pipelines.truncateDate",
+    parents: "fluid.tests.pipelines.fetchAndJoin",
+    elements: {
+        joined: {
+            type: "fluid.compoundElement",
+            elements: {
+                truncate: {
+                    type: "fluid.tests.dataPipeline.truncateDate",
+                    input: "{joined}.data"
+                }
+            }
+        }
+    }
+}

@@ -127,6 +127,7 @@ fluid.tangledMat.topValueCell = function (path) {
     for (var i = mat.layers.length - 1; i >= 0; --i) {
         var layer = mat.layers[i];
         var value = fluid.getImmediate(layer.value, path);
+        // TODO: This is presumably where we have room for the new incarnation of "mergePolicies"
         if (value !== undefined) {
             return {
                 value: value,

@@ -1,0 +1,44 @@
+{
+    type: "fluid.pipelines.WeCount-ODC",
+    elements: {
+        WeCount: {
+            type: "fluid.fetchGitCSV",
+            repoOwner: "inclusive-design",
+            repoName: "covid-assessment-centres",
+            filePath: "WeCount/assessment_centre_data_collection_2020_09_02.csv"
+        },
+        ODC: {
+            type: "fluid.fetchGitCSV",
+            repoOwner: "inclusive-design",
+            repoName: "covid-assessment-centres",
+            filePath: "ODC/assessment_centre_locations_2021_02_10.csv" // interpolate from "latest" - invent JSON-R
+        },
+        joined: {
+            type: "fluid.forgivingJoin",
+            left: "{WeCount}.data",
+            right: "{ODC}.data",
+            outerRight: true,
+            outputColumns: {
+                location_name: "ODC.location_name",
+                city:          "ODC.city",
+                website:       "ODC.website",
+                phone:         "ODC.phone",
+                postal_code:   "ODC.postal_code",
+                address:       "ODC.address",
+                province:      "ODC.province",
+                monday:        "ODC.monday",
+                tuesday:       "ODC.tuesday",
+                wednesday:     "ODC.wednesday",
+                thursday:      "ODC.thursday",
+                friday:        "ODC.friday",
+                latitude:      "ODC.latitude",
+                longitude:     "ODC.longitude",
+                "Accessible Entrances": "WeCount.Wheelchair-accessible entrance",
+                "Accessible Washrooms": "WeCount.Wheelchair-accessible bathrooms",
+                "Accessible Parking":   "WeCount.Accessible parking",
+                "Individual Service":   "WeCount.Personalized or individual service is offered",
+                "Wait Accommodations":  "WeCount.Queue accomodations"
+            }
+        }
+    }
+}

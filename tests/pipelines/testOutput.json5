@@ -1,0 +1,10 @@
+{
+    type: "fluid.tests.pipelines.testOutput",
+    parents: "fluid.tests.pipelines.fetchAndJoin",
+    elements: {
+        output: {
+            type: "fluid.tests.dataPipeline.testOutput",
+            input: "{joined}.data"
+        }
+    }
+}

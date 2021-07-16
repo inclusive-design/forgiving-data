@@ -32,10 +32,13 @@ fluid.resourceLoader.parsers.csv = function (resourceText, options) {
     return togo;
 };
 
-fluid.data.writeCSV = function (filename, data) {
-    var outputString = Papa.unparse(data, {
+fluid.data.writeCSV = function (filename, value) {
+    var outputString = Papa.unparse({
+        data: value.data,
+        fields: value.headers
+    }, {
         newline: "\n"
     }) + "\n";
     fs.writeFileSync(filename, outputString, "utf-8");
-    console.log("Written " + outputString.length + " bytes (" + data.length + " columns, " + Object.keys(data[0]).length + " rows) to " + filename);
+    console.log("Written " + outputString.length + " bytes (" + Object.keys(value.data[0]).length + " columns, " + value.data.length + " rows) to " + filename);
 };

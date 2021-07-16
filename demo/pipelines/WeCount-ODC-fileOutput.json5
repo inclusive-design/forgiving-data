@@ -1,0 +1,14 @@
+{
+    type: "fluid.pipelines.WeCount-ODC-fileOutput",
+    parents: "fluid.pipelines.WeCount-ODC",
+    elements: {
+        output: {
+            type: "fluid.fileOutput",
+            input: "{joined}.data",
+            path: "outputData",
+            value: "output.csv",
+            provenance: "provenance.csv",
+            provenanceMap: "provenanceMap.json"
+        }
+    }
+}
