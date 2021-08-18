@@ -4,9 +4,7 @@
 
 var fluid = require("infusion");
 
-require("../src/forgivingJoin.js");
-require("../src/CSVResource.js");
-require("../src/dataPipeline.js");
+require("../index.js");
 
 var jqUnit = fluid.require("node-jqunit");
 require("./testUtils/testUtils.js");
@@ -20,7 +18,7 @@ fluid.tests.dataPipeline.truncateDate = function (options) {
     var truncatedData = fluid.transform(rows, function (row) {
         var date = new Date(row.observationDate);
         return {
-            observationDate: date.toLocaleDateString("en-CA") // This actually agrees with ISO-8601 for the date segment
+            observationDate: date.toISOString().substring(0, 10)
         };
     });
     console.log("Outputting data ", truncatedData);

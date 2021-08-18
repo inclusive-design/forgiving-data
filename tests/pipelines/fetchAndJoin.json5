@@ -1,5 +1,6 @@
 {
     type: "fluid.tests.pipelines.fetchAndJoin",
+    parents: "fluid.pipelines.withUnauthOctokit",
     elements: {
         left: {
             type: "fluid.fetchGitCSV",

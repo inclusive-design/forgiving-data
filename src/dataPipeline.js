@@ -7,10 +7,6 @@ var fs = require("fs"),
     path = require("path");
 var octokitCore = require("@octokit/core");
 
-var octokit = new octokitCore.Octokit({
-//  auth: access_token
-});
-
 var gitOpsApi = require("git-ops-api");
 
 require("./readJSON.js");
@@ -248,7 +244,7 @@ fluid.dataPipeWrapper.computeWaitSet = function (that) {
     allCompletions.then(function () {
         console.log("Wait complete for component at path " + fluid.pathForComponent(that) + " - launching");
         that.events.launchPipe.fire();
-    });
+    }); // TODO: in the case of a rejection, launch some variant error process that perhaps allows rescuing
 };
 
 /** Determines the path of a pipeline element within its parent pipeline. This is useful for computing provenance keys
@@ -320,6 +316,13 @@ fluid.dataPipeWrapper.launch = function (that) {
         fluid.set(overlay, oneWait.path, fetched);
     });
     var provenanceKey = fluid.data.pathWithinPipeline(that).join(".");
+
+    var upDefaults = fluid.defaults(that.options.innerType);
+    // TODO: Upgrade to an extensible interpretation system
+    if (fluid.hasGrade(upDefaults, "fluid.dataPipe.withOctokit")) {
+        var octokitComponent = fluid.resolveContext("fluid.octokit", that);
+        fluid.set(overlay, "octokit", octokitComponent.octokit);
+    }
     var expanded = fluid.extend(true, {}, that.options.innerOptions, overlay);
     expanded.provenanceKey = provenanceKey;
     expanded.provenanceRecord = that.provenanceRecord;
@@ -494,8 +497,26 @@ fluid.data.flatProvenance = function (data, provenanceKey) {
     });
 };
 
-fluid.defaults("fluid.fetchGitCSV", {
+fluid.defaults("fluid.octokit", {
+    gradeNames: "fluid.component",
+    ocktokitOptions: {
+        // auth: String
+    },
+    members: {
+        octokit: "@expand:fluid.makeOctokit({that}.options.octokitOptions)"
+    }
+});
+
+fluid.defaults("fluid.datapipe.withOctokit", {
     gradeNames: "fluid.dataPipe"
+});
+
+fluid.makeOctokit = function (options) {
+    return new octokitCore.Octokit(options);
+};
+
+fluid.defaults("fluid.fetchGitCSV", {
+    gradeNames: "fluid.dataPipe.withOctokit"
 });
 
 //(from gitOpsApi.js)
@@ -506,6 +527,7 @@ fluid.defaults("fluid.fetchGitCSV", {
  * @param {String} repoName - The repo name.
  * @param {String} [branchName] - The name of the remote branch to operate.
  * @param {String} filePath - The location of the file including the path and the file name.
+ * @param {Octokit} octokit - The octokit instance to be used
  */
 
 // TODO: Refactor this as a DataSource + CSV decoder + provenance decoder, and produce a dedicated dataSourceDataPipe component
@@ -517,6 +539,7 @@ fluid.defaults("fluid.fetchGitCSV", {
  */
 fluid.fetchGitCSV = async function (options) {
     var commonOptions = fluid.filterKeys(options, ["repoOwner", "repoName", "filePath", "branchName"]);
+    var octokit = options.octokit;
     var result = await gitOpsApi.fetchRemoteFile(octokit, commonOptions);
     var parsed = await fluid.resourceLoader.parsers.csv(result.content, {resourceSpec: {}});
     var commitInfo = await gitOpsApi.getFileLastCommit(octokit, commonOptions);
@@ -533,7 +556,22 @@ fluid.fetchGitCSV = async function (options) {
     };
 };
 
-fluid.defaults("fluid.fileOutput", {
+/** Accepts a structure holding a member `filePath`, and returns a shallow copy of it including additional
+ * members encoding relative paths `provenancePath` and `provenanceMapPath` which will
+ * @param {Object} options - An options structure holding `filePath`
+ * @return {Object} A shallow copy of `options` including additional members encoding provenance paths
+ */
+fluid.filePathToProvenancePath = function (options) {
+    var filePath = options.filePath;
+    var extpos = filePath.lastIndexOf(".");
+    return {
+        ...options,
+        provenancePath: filePath.substring(0, extpos) + "-provenance.csv",
+        provenanceMapPath: filePath.substring(0, extpos) + "-provenanceMap.json"
+    };
+};
+
+fluid.defaults("fluid.csvFileOutput", {
     gradeNames: "fluid.dataPipe"
 });
 
@@ -545,14 +583,18 @@ fluid.defaults("fluid.fileOutput", {
  *     {String} `provenenceMap` holding the filename within `path` where the map of provenance strings to records is to be written as JSON
  *     {ProvenancedTable} input - The data to be written
  */
-fluid.fileOutput = function (options) {
-    fs.mkdirSync(options.path, { recursive: true });
-    var input = options.input;
+fluid.csvFileOutput = function (options) {
+    var dirName = path.dirname(options.filePath);
+    fs.mkdirSync(dirName, { recursive: true });
 
-    fluid.data.writeCSV(path.join(options.path, options.value), input.value);
-    fluid.data.writeCSV(path.join(options.path, options.provenance), {
-        headers: input.value.headers,
-        data: input.provenance
-    });
-    fluid.data.writeJSONSync(path.join(options.path, options.provenanceMap), input.provenanceMap);
+    var input = options.input;
+    fluid.data.writeCSV(options.filePath, input.value);
+    if (options.writeProvenance) {
+        var provOptions = fluid.filePathToProvenancePath(options);
+        fluid.data.writeCSV(provOptions.provenancePath, {
+            headers: input.value.headers,
+            data: input.provenance
+        });
+        fluid.data.writeJSONSync(provOptions.provenanceMapPath, input.provenanceMap);
+    }
 };

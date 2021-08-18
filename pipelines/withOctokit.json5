@@ -1,0 +1,12 @@
+{ // A pipeline defining an "octokit" instance whose authorization is taken from an environment variable named GITHUB_TOKEN
+  // This will contextualise any pipeline elements which manipulate github repositories
+    type: "fluid.pipelines.withOctokit",
+    elements: {
+        octokit: {
+            type: "fluid.octokit",
+            octokitOptions: {
+                auth: "{env}.GITHUB_TOKEN"
+            }
+        }
+    }
+}
