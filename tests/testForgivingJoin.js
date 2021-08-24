@@ -4,9 +4,7 @@
 
 var fluid = require("infusion");
 
-require("../src/forgivingJoin.js");
-require("../src/CSVResource.js");
-require("../src/dataPipeline.js"); // for fluid.data.flatProvenance
+require("../index.js");
 
 var jqUnit = fluid.require("node-jqunit");
 require("./testUtils/testUtils.js");

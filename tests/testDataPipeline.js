@@ -34,6 +34,10 @@ fluid.defaults("fluid.tests.dataPipeline.truncateDate", {
     gradeNames: "fluid.overlayProvenancePipe"
 });
 
+fluid.defaults("fluid.tests.dataPipeline.testOutput", {
+    gradeNames: "fluid.dataPipe"
+});
+
 fluid.tests.dataPipeline.testOutput = async function (options) {
     var input = options.input;
 
@@ -44,10 +48,6 @@ fluid.tests.dataPipeline.testOutput = async function (options) {
     jqUnit.assertDeepEq("Expected pipeline output", expectedJoin.data, input.value.data);
     jqUnit.assertDeepEq("Expected output provenance", expectedProvenance.data, input.provenance);
 };
-
-fluid.defaults("fluid.tests.dataPipeline.testOutput", {
-    gradeNames: "fluid.dataPipe"
-});
 
 jqUnit.test("Test merging pipeline", function () {
     jqUnit.expect(2);

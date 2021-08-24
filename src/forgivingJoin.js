@@ -185,17 +185,21 @@ fluid.forgivingJoin = function (options) {
         [leftName]: options.left.provenanceMap[leftName],
         [rightName]: options.right.provenanceMap[rightName]
     };
+    var headers = Object.keys(options.outputColumns);
 
     return {
         value: {
-            headers: Object.keys(options.outputColumns),
+            headers: headers,
             data: fullOutputValue
         },
         joinKeys: {
             left: best.leftKey,
             right: best.rightKey
         },
-        provenance: fullOutputProvenance,
+        provenance: {
+            headers: headers,
+            data: fullOutputProvenance
+        },
         provenanceMap: provenanceMap
     };
 };

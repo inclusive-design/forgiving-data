@@ -1,17 +1,15 @@
 {
     type: "fluid.pipelines.WeCount-ODC",
-    parents: "fluid.pipelines.withOctokit",
+    parents: "fluid.pipelines.withUnauthOctokit",
     elements: {
         WeCount: {
             type: "fluid.fetchGitCSV",
-            octokit: "{octokit}.octokit",
             repoOwner: "inclusive-design",
             repoName: "covid-assessment-centres",
             filePath: "WeCount/assessment_centre_data_collection_2020_09_02.csv"
         },
         ODC: {
             type: "fluid.fetchGitCSV",
-            octokit: "{octokit}.octokit",
             repoOwner: "inclusive-design",
             repoName: "covid-assessment-centres",
             filePath: "ODC/assessment_centre_locations_2021_02_10.csv" // interpolate from "latest" - invent JSON-R

@@ -4,12 +4,13 @@
 
 var fluid = require("infusion");
 var fs = require("fs"),
+    axios = require("axios"),
     path = require("path");
 var octokitCore = require("@octokit/core");
 
 var gitOpsApi = require("git-ops-api");
 
-require("./readJSON.js");
+require("./JSONEncoding.js");
 require("./settleStructure.js");
 require("./tangledMat.js");
 
@@ -18,9 +19,9 @@ fluid.registerNamespace("fluid.data");
 /**
  * A layer structure as stored within a fluid.tangledMat.
  * @typedef {Object} ProvenancedTable
- * @property {Object<String, String>[]} value - Array of CSV row values
- * @property {Object<String, String>[]} provenanceMap - Isomorphic to `value` - an array of provenance records for each row
- * @property {Object} provenanceMap A map of provenance strings to records resolving the provenance - either a dataset record or another pipeline record
+ * @property {CSVValue} value - CSV value stored as entries {headers, data}
+ * @property {Object<String, String>[]} provenanceMap - Isomorphic to `value.data` - an array of provenance records for each row
+ * @property {Object} provenanceMap - A map of provenance strings to records resolving the provenance - either a dataset record or another pipeline record
  */
 
 /** Hierarchy for primitive dataPipes based around simple functions **/
@@ -215,11 +216,17 @@ fluid.isParentComponent = function (parent, child) {
  * it are then resolved onto components by means of a modified version of Infusion's core algorithm (see slide
  * 16 of https://docs.google.com/presentation/d/12vLg_zWS6uXaHRy8LWQLzfNPBYa1E6L-WWyLqH1iWJ4 ). Finally, a promise sequence
  * which waits for completion of all of these dependencies is bound to a firing of the component's `launchPipe` event.
+ * As a side-effect, this function also computes the `provenanceRecord' member which is assigned as a top-level member
+ * of the component - this consists of its `innerOptions` record with all data dependencies censored, and the `innerType`
+ * member of `innerOptions` assigned to its member `type` (corresponding to the original `type` member of the pipeline
+ * element).
  * @param {fluid.dataPipeWrapper} that - The component for which the waitSet is to be computed
  */
 fluid.dataPipeWrapper.computeWaitSet = function (that) {
     var waitSet = [];
     that.provenanceRecord = fluid.data.findWaitSet(that.options.innerOptions, waitSet, []);
+    // TODO: Naturally we would like to be more accurate about this - we would like to locate where the code sits
+    // implementing this grade, and then locate which revision of it was executed
     that.provenanceRecord.type = that.options.innerType;
     that.waitSet = waitSet;
     var waitCompletions = fluid.transform(waitSet, function (oneWait) {
@@ -279,7 +286,7 @@ fluid.dataPipeWrapper.interpretPipeResult = function (result, provenanceKey, opt
 
         var mat = fluid.tangledMat([{
             value: input.value.data,
-            provenance: input.provenance,
+            provenance: input.provenance.data,
             name: "input"}, {
             value: result.value.data,
             name: provenanceKey
@@ -288,8 +295,10 @@ fluid.dataPipeWrapper.interpretPipeResult = function (result, provenanceKey, opt
             data: mat.evaluateFully([]),
             headers: input.value.headers
         };
-        console.log("Overlay value ", result.value);
-        result.provenance = mat.getProvenance();
+        result.provenance = {
+            data: mat.getProvenance(),
+            headers: input.value.headers
+        };
         result.provenanceKey = provenanceKey;
         result.provenanceMap = fluid.extend({}, input.provenanceMap, {
             [provenanceKey]: that.provenanceRecord
@@ -515,6 +524,35 @@ fluid.makeOctokit = function (options) {
     return new octokitCore.Octokit(options);
 };
 
+
+/** Assemble a return structure from a data source which is to be considered providing flat provenance - e.g.
+ * an external data source such fetch from a URL or unmanaged GitHub repository.
+ * @param {String} data - The data value fetched from the source, as a string
+ * @param {Object} options - The options structure governing the fetch - this should contain members, as
+ * supplied by `fluid.dataPipeWrapper.launch`,
+ *    {String} options.provenanceKey - The provenance key computed for this source
+ *    {Object} options.provenanceRecord - The provenance record derived from this source's options
+ * @param {Object} provenanceExtra - Extra provenance information supplied by the source - e.g. access time or
+ * commit info
+ * @return {ProvenancedTable} A provenancedTable structure
+ */
+fluid.flatProvenanceCSVSource = async function (data, options, provenanceExtra) {
+    var parsed = await fluid.data.parseCSV(data);
+    var provenanceKey = options.provenanceKey;
+    return {
+        value: parsed,
+        provenance: {
+            headers: parsed.headers,
+            data: fluid.data.flatProvenance(parsed.data, provenanceKey)
+        },
+        provenanceKey: provenanceKey,
+        provenanceMap: {
+            [options.provenanceKey]: fluid.extend(true, {}, options.provenanceRecord, provenanceExtra)
+        }
+    };
+};
+
+
 fluid.defaults("fluid.fetchGitCSV", {
     gradeNames: "fluid.dataPipe.withOctokit"
 });
@@ -530,7 +568,7 @@ fluid.defaults("fluid.fetchGitCSV", {
  * @param {Octokit} octokit - The octokit instance to be used
  */
 
-// TODO: Refactor this as a DataSource + CSV decoder + provenance decoder, and produce a dedicated dataSourceDataPipe component
+// TODO: Refactor this as a DataSource + CV decoder + provenance decoder, and produce a dedicated dataSourceDataPipe component
 /** A function fetching a single CSV file from a GitHub repository URL. It will be returned as a barebones
  * `ProvenancedTable` with just a value. The provenance will be assumed to be filled in by the loader, e.g.
  * fluid.dataPipeWrapper
@@ -541,23 +579,28 @@ fluid.fetchGitCSV = async function (options) {
     var commonOptions = fluid.filterKeys(options, ["repoOwner", "repoName", "filePath", "branchName"]);
     var octokit = options.octokit;
     var result = await gitOpsApi.fetchRemoteFile(octokit, commonOptions);
-    var parsed = await fluid.resourceLoader.parsers.csv(result.content, {resourceSpec: {}});
     var commitInfo = await gitOpsApi.getFileLastCommit(octokit, commonOptions);
-    var provenanceKey = options.provenanceKey;
-    return {
-        value: parsed,
-        provenance: fluid.data.flatProvenance(parsed.data, provenanceKey),
-        provenanceKey: provenanceKey,
-        provenanceMap: {
-            [options.provenanceKey]: fluid.extend(true, {}, options.provenanceRecord, {
-                commitInfo: commitInfo
-            })
-        }
-    };
+    return fluid.flatProvenanceCSVSource(result.content, options, {
+        commitInfo: commitInfo
+    });
+};
+
+fluid.defaults("fluid.fetchUrlCSV", {
+    gradeNames: "fluid.dataPipe.withOctokit"
+});
+
+// TODO: Similarly turn into DataSource - and resolve our issues with promotion of encoding
+fluid.fetchUrlCSV = async function (options) {
+    let response = await axios.get(options.url);
+
+    return fluid.flatProvenanceCSVSource(response.data, options, {
+        fetchedAt: new Date().toISOString()
+    });
 };
 
 /** Accepts a structure holding a member `filePath`, and returns a shallow copy of it including additional
- * members encoding relative paths `provenancePath` and `provenanceMapPath` which will
+ * members encoding relative paths `provenancePath` and `provenanceMapPath` which can be used to store provenenace
+ * and provenance map structures respectively.
  * @param {Object} options - An options structure holding `filePath`
  * @return {Object} A shallow copy of `options` including additional members encoding provenance paths
  */
@@ -571,30 +614,126 @@ fluid.filePathToProvenancePath = function (options) {
     };
 };
 
+
+
+/**
+ * Representation of a pathed file and its contents (generally on its way to be written, e.g. by gitOps. commitMultipleFiles
+ * @typedef {Object} FileEntry
+ * @param {String} path - The path of the data to be written
+ * @param {String} content - The content of the data to be written
+ */
+
+/**
+ * An object that contains required information for fetching a file.
+ * @typedef {Object} ProvenancedTableWriteOptions
+ * @param {String} filePath - The path where the main data value is to be written
+ * @param {ProvenancedTable} input - The data to be written
+ * @param {Boolean} writeProvenance - `true` if provenance data is to be written alongside the supplied file in the same directory
+ */
+
+/** Converts a provenanced table record to data suitable for writing (e.g. either to the filesystem or as a
+ *  git commit).
+ * @param {ProvenancedTableWriteOptions} options - Options determining the data to be written
+ * @param {Function} encoder - A function to encode the supplied data
+ * @return {FileEntry[]} files - An array of objects. Each object contains a file information in a structure of
+ * [{path: {String}, content: {String}}, ...].
+ */
+fluid.provenancedDataToWritable = function (options, encoder) {
+    var input = options.input;
+    var files = [{
+        path: options.filePath,
+        content: encoder(input.value)
+    }];
+    if (options.writeProvenance) {
+        var provOptions = fluid.filePathToProvenancePath(options);
+        files.push({
+            path: provOptions.provenancePath,
+            content: encoder(input.provenance)
+        });
+        files.push({
+            path: provOptions.provenanceMapPath,
+            content: fluid.data.encodeJSON(input.provenanceMap)
+        });
+    }
+    return files;
+};
+
+/** Write a set of prepared file entries as files to the filesystem
+ * @param {FileEntry[]} entries - File entries to be written
+ */
+fluid.writeFileEntries = function (entries) {
+    entries.forEach(function (entry) {
+        var dirName = path.dirname(entry.path);
+        fs.mkdirSync(dirName, { recursive: true });
+        fs.writeFileSync(entry.path, entry.content);
+        console.log("Written " + entry.content.length + " bytes to " + entry.path);
+    });
+};
+
 fluid.defaults("fluid.csvFileOutput", {
     gradeNames: "fluid.dataPipe"
 });
 
 /** A pipeline entry which outputs a provenance record to a grouped set of files
- * @param {Object} options - The pipeline element's record in the configuration, including members
- *     {String} `path` holding the directory where the files are to be written
- *     {String} `value` holding the filename within `path` where the data is to be written as CSV
- *     {String} `provenance` holding the filename within `path` where the provenance data is to be written as CSV
- *     {String} `provenenceMap` holding the filename within `path` where the map of provenance strings to records is to be written as JSON
- *     {ProvenancedTable} input - The data to be written
+ * @param {ProvenancedTableWriteOptions} options - Options determining the data to be written
  */
 fluid.csvFileOutput = function (options) {
-    var dirName = path.dirname(options.filePath);
-    fs.mkdirSync(dirName, { recursive: true });
+    var entries = fluid.provenancedDataToWritable(options, fluid.data.encodeCSV);
+    fluid.writeFileEntries(entries);
+};
 
-    var input = options.input;
-    fluid.data.writeCSV(options.filePath, input.value);
-    if (options.writeProvenance) {
-        var provOptions = fluid.filePathToProvenancePath(options);
-        fluid.data.writeCSV(provOptions.provenancePath, {
-            headers: input.value.headers,
-            data: input.provenance
+fluid.defaults("fluid.dataPipe.commitMultipleFiles", {
+    gradeNames: "fluid.dataPipe.withOctokit"
+});
+
+fluid.dataPipe.commitMultipleFiles = async function (options) {
+    var entries = options.files.map(function (fileOptions) {
+        var innerEntries = fluid.provenancedDataToWritable(fileOptions, fileOptions.encoder);
+        var extras = fluid.each(fluid.makeArray(fileOptions.convertEntry), function (converter) {
+            return converter(fileOptions, innerEntries);
         });
-        fluid.data.writeJSONSync(provOptions.provenanceMapPath, input.provenanceMap);
-    }
+        return innerEntries.concat(extras);
+    });
+    var flatEntries = fluid.flatten(entries);
+    return gitOpsApi.commitMultipleFiles(options.octokit, {
+        repoOwner: options.repoOwner,
+        repoName: options.repoName,
+        branchName: options.branchName,
+        files: flatEntries,
+        commitMessage: options.commitMessage
+    });
+};
+
+
+fluid.defaults("fluid.dataPipe.gitFileNotExists", {
+    gradeNames: "fluid.dataPipe.withOctokit"
+});
+
+/** Converts the existence of a file in a Github repository into a rejection. Useful to abort a pipeline if a
+ * particular output exists already.
+ * @param {Object} options - Accepts a structure
+ *            octokit: "{octokit}.octokit"
+ *            config: "{config}.options"
+ *            coordinates: {fetchCoordinates}.data" - including filePath
+ * @return {Promise} A promise which rejects if the file with given coordinates exists already, or if an error occurs.
+ * If the file does not exist, the promise will resolve.
+ */
+fluid.dataPipe.gitFileNotExists = async function (options) {
+    var promise = gitOpsApi.fetchRemoteFile(options.octokit, {
+        repoOwner: options.config.repoOwner,
+        repoName: options.config.repoName,
+        branchName: options.config.branchName,
+        filePath: options.coordinates.filePath
+    });
+    var togo = fluid.promise();
+    promise.then(function (res) {
+        if (!res.exists) { // The nonexistence of the file is converted to a resolution which continues the pipeline
+            togo.resolve(res);
+        } else { // The existence of the file is converted to a rejection which aborts the pipeline
+            togo.reject(res);
+        }
+    }, function (err) {
+        togo.reject(err);
+    });
+    return togo;
 };
