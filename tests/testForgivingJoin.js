@@ -62,5 +62,5 @@ jqUnit.test("Test basic join", async function () {
     jqUnit.assertDeepEq("Provenance map as expected", expected.provenanceMap, joined.provenanceMap);
 
     jqUnit.assertDeepEq("Joined value as expected", expectedJoin.data, joined.value.data);
-    jqUnit.assertDeepEq("Joined provenance as expected", expectedProvenance.data, joined.provenance);
+    jqUnit.assertDeepEq("Joined provenance as expected", expectedProvenance.data, joined.provenance.data);
 });

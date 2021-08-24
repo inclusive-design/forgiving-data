@@ -46,7 +46,7 @@ fluid.tests.dataPipeline.testOutput = async function (options) {
 
     // console.log("Got output ", JSON.stringify(rows, null, 2));
     jqUnit.assertDeepEq("Expected pipeline output", expectedJoin.data, input.value.data);
-    jqUnit.assertDeepEq("Expected output provenance", expectedProvenance.data, input.provenance);
+    jqUnit.assertDeepEq("Expected output provenance", expectedProvenance.data, input.provenance.data);
 };
 
 jqUnit.test("Test merging pipeline", function () {
