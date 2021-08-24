@@ -17,7 +17,7 @@ require("./tangledMat.js");
 fluid.registerNamespace("fluid.data");
 
 /**
- * A layer structure as stored within a fluid.tangledMat.
+ * A provenanced CSV value
  * @typedef {Object} ProvenancedTable
  * @property {CSVValue} value - CSV value stored as entries {headers, data}
  * @property {Object<String, String>[]} provenanceMap - Isomorphic to `value.data` - an array of provenance records for each row
@@ -163,11 +163,12 @@ fluid.data.findWaitSet = function (options, waitSet, segs) {
         // here and determine whether this really is a data dependency
         if (fluid.isIoCReference(value)) {
             var parsed = fluid.parseContextReference(value);
-            if (parsed.path === "data") {
+            parsed.segs = fluid.model.parseEL(parsed.path);
+            if (parsed.segs[0] === "data") {
                 waitSet.push({
                     ref: value,
                     parsed: parsed,
-                    path: fluid.copy(segs)
+                    sourceSegs: fluid.copy(segs)
                 });
             }
             togo = fluid.NO_VALUE;
@@ -323,8 +324,8 @@ fluid.dataPipeWrapper.interpretPipeResult = function (result, provenanceKey, opt
 fluid.dataPipeWrapper.launch = function (that) {
     var overlay = {};
     fluid.each(that.waitSet, function (oneWait) {
-        var fetched = fluid.get(oneWait.target, oneWait.parsed.path);
-        fluid.set(overlay, oneWait.path, fetched);
+        var fetched = fluid.get(oneWait.target, oneWait.parsed.segs);
+        fluid.set(overlay, oneWait.sourceSegs, fetched);
     });
     var provenanceKey = fluid.data.pathWithinPipeline(that).join(".");
 
