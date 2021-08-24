@@ -162,11 +162,14 @@ fluid.data.findWaitSet = function (options, waitSet, segs) {
         // TODO: In future configuration might include "safe" references to non-data - we should resolve the component
         // here and determine whether this really is a data dependency
         if (fluid.isIoCReference(value)) {
-            waitSet.push({
-                ref: value,
-                parsed: fluid.parseContextReference(value),
-                path: fluid.copy(segs)
-            });
+            var parsed = fluid.parseContextReference(value);
+            if (parsed.path === "data") {
+                waitSet.push({
+                    ref: value,
+                    parsed: parsed,
+                    path: fluid.copy(segs)
+                });
+            }
             togo = fluid.NO_VALUE;
         } else if (fluid.isPlainObject(value)) {
             togo = fluid.data.findWaitSet(value, waitSet, segs);
@@ -231,16 +234,15 @@ fluid.dataPipeWrapper.computeWaitSet = function (that) {
     that.waitSet = waitSet;
     var waitCompletions = fluid.transform(waitSet, function (oneWait) {
         var resolved = fluid.resolveContext(oneWait.parsed.context, that);
-        var failMid = "context reference " + oneWait.ref + " to a component at path " + oneWait.parsed.path + " in dataPipe options " + JSON.stringify(that.options.innerOptions, null, 2);
         if (!resolved) {
-            fluid.fail("Computing waitSet of " + fluid.dumpComponentAndPath(that) + ": could not resolve data reference " + failMid + " to a component");
+            fluid.fail("Computing waitSet of " + fluid.dumpComponentAndPath(that) + ": could not resolve context reference {" + oneWait.parsed.context + "} to a component");
         }
         // Special-case this context resolution to, e.g. resolve by priority onto joined.joined, contrary to standard Infusion scoping rules
         if (fluid.isParentComponent(resolved, that)) {
             resolved = resolved[oneWait.parsed.context] || resolved;
         }
         if (!resolved.completionPromise) {
-            fluid.fail("Resolved " + failMid + " to a non dataPipe component");
+            fluid.fail("Resolved {" + oneWait.parsed.context + "} to a non dataPipe component");
         }
         oneWait.target = resolved;
         return resolved.completionPromise;
