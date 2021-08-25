@@ -9,14 +9,14 @@
         },
         left: {
             type: "fluid.fetchGitCSV",
-            repoOwner: "{config}.options.repoOwner",
-            repoName: "{config}.options.repoName",
+            repoOwner: "{config}.repoOwner",
+            repoName: "{config}.repoName",
             filePath: "joinLeft.csv"
         },
         right: {
             type: "fluid.fetchGitCSV",
-            repoOwner: "{config}.options.repoOwner",
-            repoName: "{config}.options.repoName",
+            repoOwner: "{config}.repoOwner",
+            repoName: "{config}.repoName",
             filePath: "joinRight.csv"
         },
         joined: {

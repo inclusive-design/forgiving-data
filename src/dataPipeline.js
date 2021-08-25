@@ -350,6 +350,18 @@ fluid.dataPipeWrapper.launch = function (that) {
     fluid.promise.follow(promiseTogo, that.completionPromise);
 };
 
+fluid.data.optionsToMembers = function (record, innerOptions) {
+    var nonCore = fluid.censorKeys(record.options, ["elements", "gradeNames"]);
+    var memberOptions = {
+        members: fluid.transform(nonCore, function (value, key) {
+            return "{that}.options." + (innerOptions ? "innerOptions." : "") + key;
+        })
+    };
+    return fluid.extend(true, {
+        options: memberOptions
+    }, record);
+};
+
 /** Convert an `elements` style definition found as the options to a `fluid.dataPipeComponent` into a definitions
  * interpretable as an Infusion subcomponent definition -
  * - `parents` are converted to `gradeNames`
@@ -371,18 +383,16 @@ fluid.data.elementToGrade = function (element, baseGrade) {
     togo.options.gradeNames = gradeNames;
     var upDefaults = baseGrade ? fluid.defaults(baseGrade) : fluid.getMergedDefaults(element.type, gradeNames);
     if (fluid.hasGrade(upDefaults, "fluid.component")) {
-        return togo;
+        return fluid.data.optionsToMembers(togo, false);
     } else {
-        return {
+        return fluid.data.optionsToMembers({
             type: "fluid.dataPipeWrapper",
             options: {
                 innerType: togo.type,
                 innerOptions: togo.options
             }
-        };
+        }, true);
     }
-
-    return togo;
 };
 
 /** Register a pipeline definition as loaded in from JSON as an Infusion grade definition by converting it via `fluid.data.elementToGrade`.
