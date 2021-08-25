@@ -150,12 +150,13 @@ fluid.compoundElement.waitCompletion = function (that) {
 };
 
 /** Compute data dependencies of this element by traversing its configuration recursively.
+ * @param {fluid.component} that - The component representing the element
  * @param {Object} options - The element's options
  * @param {Object[]} waitSet - The waitSet to be computed. **This is supplied as an empty array and populated by this function**
  * @param {String[]} segs - The array of path segments to the traversed options **This is supplied as an empty array and is modified by this function**
  * @return {Object} The supplied options, with any references to data dependencies censored - this is suitable for use as a provenance record
  */
-fluid.data.findWaitSet = function (options, waitSet, segs) {
+fluid.data.findWaitSet = function (that, options, waitSet, segs) {
     return fluid.transform(options, function (value, key) {
         var togo;
         segs.push(key);
@@ -164,16 +165,19 @@ fluid.data.findWaitSet = function (options, waitSet, segs) {
         if (fluid.isIoCReference(value)) {
             var parsed = fluid.parseContextReference(value);
             parsed.segs = fluid.model.parseEL(parsed.path);
-            if (parsed.segs[0] === "data") {
+            var isData = parsed.segs[0] === "data";
+            if (isData) {
                 waitSet.push({
                     ref: value,
                     parsed: parsed,
                     sourceSegs: fluid.copy(segs)
                 });
+                togo = fluid.NO_VALUE;
+            } else {
+                togo = fluid.expandImmediate(value, that);
             }
-            togo = fluid.NO_VALUE;
         } else if (fluid.isPlainObject(value)) {
-            togo = fluid.data.findWaitSet(value, waitSet, segs);
+            togo = fluid.data.findWaitSet(that, value, waitSet, segs);
         } else {
             togo = value;
         }
@@ -228,7 +232,7 @@ fluid.isParentComponent = function (parent, child) {
  */
 fluid.dataPipeWrapper.computeWaitSet = function (that) {
     var waitSet = [];
-    that.provenanceRecord = fluid.data.findWaitSet(that.options.innerOptions, waitSet, []);
+    that.provenanceRecord = fluid.data.findWaitSet(that, that.options.innerOptions, waitSet, []);
     // TODO: Naturally we would like to be more accurate about this - we would like to locate where the code sits
     // implementing this grade, and then locate which revision of it was executed
     that.provenanceRecord.type = that.options.innerType;
@@ -242,10 +246,10 @@ fluid.dataPipeWrapper.computeWaitSet = function (that) {
         if (fluid.isParentComponent(resolved, that)) {
             resolved = resolved[oneWait.parsed.context] || resolved;
         }
+        oneWait.target = resolved;
         if (!resolved.completionPromise) {
             fluid.fail("Resolved {" + oneWait.parsed.context + "} to a non dataPipe component");
         }
-        oneWait.target = resolved;
         return resolved.completionPromise;
     });
     console.log("Component at path " + fluid.pathForComponent(that) + " waiting on set " + fluid.getMembers(waitSet, "parsed.context"));
@@ -335,7 +339,7 @@ fluid.dataPipeWrapper.launch = function (that) {
         var octokitComponent = fluid.resolveContext("fluid.octokit", that);
         fluid.set(overlay, "octokit", octokitComponent.octokit);
     }
-    var expanded = fluid.extend(true, {}, that.options.innerOptions, overlay);
+    var expanded = fluid.extend(true, {}, that.provenanceRecord, overlay);
     expanded.provenanceKey = provenanceKey;
     expanded.provenanceRecord = that.provenanceRecord;
     var result = fluid.invokeGlobalFunction(that.options.innerType, [expanded]);
