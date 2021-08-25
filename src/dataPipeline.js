@@ -731,19 +731,17 @@ fluid.defaults("fluid.dataPipe.gitFileNotExists", {
 
 /** Converts the existence of a file in a Github repository into a rejection. Useful to abort a pipeline if a
  * particular output exists already.
- * @param {Object} options - Accepts a structure
- *            octokit: "{octokit}.octokit"
- *            config: "{config}.options"
- *            coordinates: {fetchCoordinates}.data" - including filePath
+ * @param {FetchRemoteFileOptions} options - Accepts a structure as for fetchGitCSV determining the coordinates of the file
+ * to be checked
  * @return {Promise} A promise which rejects if the file with given coordinates exists already, or if an error occurs.
  * If the file does not exist, the promise will resolve.
  */
 fluid.dataPipe.gitFileNotExists = async function (options) {
     var promise = gitOpsApi.fetchRemoteFile(options.octokit, {
-        repoOwner: options.config.repoOwner,
-        repoName: options.config.repoName,
-        branchName: options.config.branchName,
-        filePath: options.coordinates.filePath
+        repoOwner: options.repoOwner,
+        repoName: options.repoName,
+        branchName: options.branchName,
+        filePath: options.filePath
     });
     var togo = fluid.promise();
     promise.then(function (res) {
