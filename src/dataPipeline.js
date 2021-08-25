@@ -511,11 +511,11 @@ fluid.data.flatProvenance = function (data, provenanceKey) {
 
 fluid.defaults("fluid.octokit", {
     gradeNames: "fluid.component",
-    ocktokitOptions: {
+    octokitOptions: {
         // auth: String
     },
     members: {
-        octokit: "@expand:fluid.makeOctokit({that}.options.octokitOptions)"
+        octokit: "@expand:fluid.makeOctokit({that}, {that}.options.octokitOptions)"
     }
 });
 
@@ -523,8 +523,11 @@ fluid.defaults("fluid.datapipe.withOctokit", {
     gradeNames: "fluid.dataPipe"
 });
 
-fluid.makeOctokit = function (options) {
-    return new octokitCore.Octokit(options);
+fluid.makeOctokit = function (that, options) {
+    // TODO: Framework bug - because subcomponent records arrive via dynamicComponents total options their options
+    // do not get expanded properly.
+    var expanded = fluid.expandImmediate(options, that);
+    return new octokitCore.Octokit(expanded);
 };
 
 
