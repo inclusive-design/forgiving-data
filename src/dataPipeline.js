@@ -351,7 +351,7 @@ fluid.dataPipeWrapper.launch = function (that) {
 };
 
 fluid.data.optionsToMembers = function (record, innerOptions) {
-    var nonCore = fluid.censorKeys(record.options, ["elements", "gradeNames"]);
+    var nonCore = innerOptions ? record.options.innerOptions : fluid.censorKeys(record.options, ["elements", "gradeNames"]);
     var memberOptions = {
         members: fluid.transform(nonCore, function (value, key) {
             return "{that}.options." + (innerOptions ? "innerOptions." : "") + key;
