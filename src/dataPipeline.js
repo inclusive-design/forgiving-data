@@ -732,7 +732,7 @@ fluid.dataPipe.commitMultipleFiles = async function (options) {
     var entries = options.files.map(function (fileOptions) {
         var encoder = fluid.getGlobalValue(fileOptions.encoder);
         var innerEntries = fluid.provenancedDataToWritable(fileOptions, encoder);
-        var extras = fluid.each(fluid.makeArray(fileOptions.convertEntry), function (converterName) {
+        var extras = fluid.transform(fluid.makeArray(fileOptions.convertEntry), function (converterName) {
             var converter = fluid.getGlobalValue(converterName);
             return converter(fileOptions, innerEntries);
         });
