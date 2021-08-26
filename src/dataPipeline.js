@@ -719,10 +719,21 @@ fluid.defaults("fluid.dataPipe.commitMultipleFiles", {
     gradeNames: "fluid.dataPipe.withOctokit"
 });
 
+/** Commits multiple files into a github repository as a single commit, applying suitable encoding to the files to be
+ * written as well as any post-processing.
+ *
+ * @param {CommitMultipleFilesOptions} options - The options governing the files to be committed. The FileEntry options can contain
+ * extra entries
+ *     {String} encoder - Name of a global function encoding an individual file
+ *     {String|String[]} convertEntry - Name of a global function contributing further fileEntries to the collection
+ * @return {Promise} Promise for success or failure of the operation as returned from gitOpsApi.commitMultipleFiles
+ */
 fluid.dataPipe.commitMultipleFiles = async function (options) {
     var entries = options.files.map(function (fileOptions) {
-        var innerEntries = fluid.provenancedDataToWritable(fileOptions, fileOptions.encoder);
-        var extras = fluid.each(fluid.makeArray(fileOptions.convertEntry), function (converter) {
+        var encoder = fluid.getGlobalValue(fileOptions.encoder);
+        var innerEntries = fluid.provenancedDataToWritable(fileOptions, encoder);
+        var extras = fluid.each(fluid.makeArray(fileOptions.convertEntry), function (converterName) {
+            var converter = fluid.getGlobalValue(converterName);
             return converter(fileOptions, innerEntries);
         });
         return innerEntries.concat(extras);
