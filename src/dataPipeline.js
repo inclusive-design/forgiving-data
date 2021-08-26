@@ -319,6 +319,19 @@ fluid.dataPipeWrapper.interpretPipeResult = function (result, provenanceKey, opt
     return result;
 };
 
+/** Produce an "isomorphic skeleton" of a deeply structured object, preserving its container structure but omitting
+ *  any primitive values at the leaves.
+ * @param {Any} tocopy - The value to be copied
+ * @return {Any} The skeleton of the copied value
+ */
+fluid.data.makeSkeleton = function (tocopy) {
+    if (fluid.isPrimitive(tocopy)) {
+        return fluid.NO_VALUE;
+    } else {
+        return fluid.transform(tocopy, fluid.data.makeSkeleton);
+    }
+};
+
 /** Launch the `fluid.dataPipe` function wrapped within a `fluid.dataPipeWrapper` by resolving its input options
  * with respect to the `waitSet` computed by `fluid.dataPipeWrapper.computeWaitSet`, and then interpreting its
  * output into a data provenance record by means of fluid.dataPipeWrapper.interpretPipeResult. This result is then
@@ -326,7 +339,7 @@ fluid.dataPipeWrapper.interpretPipeResult = function (result, provenanceKey, opt
  * @param {fluid.dataPipeWrapper} that - The `fluid.dataPipeWrapper` element to be launched
  */
 fluid.dataPipeWrapper.launch = function (that) {
-    var overlay = {};
+    var overlay = fluid.data.makeSkeleton(that.provenanceRecord);
     fluid.each(that.waitSet, function (oneWait) {
         var fetched = fluid.get(oneWait.target, oneWait.parsed.segs);
         fluid.set(overlay, oneWait.sourceSegs, fetched);
