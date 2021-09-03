@@ -10,6 +10,4 @@ require("./src/forgivingJoin.js");
 require("./src/dataPipeline.js");
 require("./src/environmentResolver.js");
 
-fluid.registerNamespace("fluid.data");
-
-fluid.data.loadAllPipelines("%forgiving-data/pipelines");
+fluid.dataPipeline.loadAll("%forgiving-data/pipelines");

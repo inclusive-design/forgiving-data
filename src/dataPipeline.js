@@ -11,10 +11,10 @@ var octokitCore = require("@octokit/core");
 var gitOpsApi = require("git-ops-api");
 
 require("./JSONEncoding.js");
-require("./settleStructure.js");
 require("./tangledMat.js");
 
 fluid.registerNamespace("fluid.data");
+fluid.registerNamespace("fluid.dataPipe");
 
 /**
  * A provenanced CSV value
@@ -113,8 +113,23 @@ fluid.defaults("fluid.compoundElement", {
 // A grade for an entire pipeline - just as a marker grade since there is no additional functionality beyond fluid.compoundElement
 
 fluid.defaults("fluid.dataPipeline", {
-    gradeNames: "fluid.compoundElement"
+    gradeNames: "fluid.compoundElement",
+    mergePolicy: {
+        require: {
+            noexpand: true,
+            func: fluid.arrayConcatPolicy
+        }
+    },
+    evaluateRequire: "@expand:fluid.dataPipeline.evaluateRequire({that}.options.require)"
+    // require: String|String[] for code to be loaded on startup
 });
+
+fluid.dataPipeline.evaluateRequire = function (requires) {
+    fluid.each(requires, function (require) {
+        fluid.require(require);
+    });
+    return true;
+};
 
 /** Determine which is the pipeline element which will form the output of this compound element, and bind our own completion
  * promise to its one
@@ -363,8 +378,21 @@ fluid.dataPipeWrapper.launch = function (that) {
     fluid.promise.follow(promiseTogo, that.completionPromise);
 };
 
+
+/** Convert any top-level options definitions in a grade definition into "members" to that they can be referenced
+ * as top-level material. This is forward-looking to Infusion 6 where there will no longer be such a silly distinction
+ * as "options" vs any other material - see https://issues.fluidproject.org/browse/FLUID-5750 for details of the
+ * "options flattening revolution".
+ * This function distinguishes between component and `fluid.dataPipe` style pipes by means of the `innerOptions`
+ * argument.
+ * @param {Object} record - The original options record supplied to the `element`.
+ * @param {Boolean} innerOptions - `true` if this is a `fluid.dataPipe` definition and we instead need to promote
+ * options from the inner `innerOptions` record within the supplied record rather than its own top-level entries.
+ * @return {Object} A set of options suitable to be overlaid onto a {type: ... , options: ... } record
+ * for Infusion 1-5 style component construction.
+ */
 fluid.data.optionsToMembers = function (record, innerOptions) {
-    var nonCore = innerOptions ? record.options.innerOptions : fluid.censorKeys(record.options, ["elements", "gradeNames"]);
+    var nonCore = innerOptions ? record.options.innerOptions : fluid.censorKeys(record.options, ["elements", "gradeNames", "require"]);
     var memberOptions = {
         members: fluid.transform(nonCore, function (value, key) {
             return "{that}.options." + (innerOptions ? "innerOptions." : "") + key;
@@ -375,10 +403,12 @@ fluid.data.optionsToMembers = function (record, innerOptions) {
     }, record);
 };
 
-/** Convert an `elements` style definition found as the options to a `fluid.dataPipeComponent` into a definitions
+/** Convert an `elements` style definition found as the options to a `fluid.dataPipeComponent` into a definition
  * interpretable as an Infusion subcomponent definition -
  * - `parents` are converted to `gradeNames`
  * - Options are unflattened with all elements other than `type` shifted into `options`
+ * - Any non-core options are additionally converted into `members` definitions allowing them to be referenced from the
+ * top level of the component
  * - Any primitive `fluid.dataPipe` definitions are housed inside `fluid.dataPipeWrapper` components
  * This is invoked either by top-level `fluid.data.registerPipeline` or by the `fluid.data.mergeElements` promotion algorithm
  * @param {Object} element - `element`-style configuration for the pipeline
@@ -411,12 +441,85 @@ fluid.data.elementToGrade = function (element, baseGrade) {
 /** Register a pipeline definition as loaded in from JSON as an Infusion grade definition by converting it via `fluid.data.elementToGrade`.
  * @param {Object} pipeline - The top-level pipeline definition as loaded from JSON
  */
-fluid.data.registerPipeline = function (pipeline) {
+fluid.dataPipeline.register = function (pipeline) {
     var rec = fluid.data.elementToGrade(pipeline, "fluid.dataPipeline");
     console.log("Registering ", rec.options, " under type ", rec.type);
     fluid.defaults(rec.type, rec.options);
 };
 
+/** Load and construct a pipeline merging the supplied pipeline grade names --- these must already have been loaded as Infusion defaults.
+ * This will construct and return a pipeline component which will begin to load immediately. Completion will be signalled
+ * by the top-level member `completionPromise`, yielding any final output {ProvenancedTable}, although it is expected that
+ * this will be in practice delivered to some side-effect yielding final pipeline member.
+ * @param {String|String[]} types - The pipeline grades to be merged and loaded.
+ * @return {fluid.dataPipeline} The instantiated pipeline component
+ */
+fluid.dataPipeline.build = function (types) {
+    var that = fluid.dataPipeline({
+        gradeNames: types
+    });
+    return that;
+};
+
+/** Load a single pipeline definition file into an Infusion grade structures
+ * @param {String} filename - An Infusion module-qualified pipeline definition file to be loaded
+ */
+fluid.dataPipeline.load = function (filename) {
+    var defaults = fluid.data.readJSONSync(filename, "Loading pipeline definition");
+    fluid.dataPipeline.register(defaults);
+};
+
+/** Load all the pipeline definitions in a supplied directory into Infusion grade structures
+ * @param {String} directory - An Infusion module-qualified directory name from which all directly nested files will be loaded
+ */
+fluid.dataPipeline.loadAll = function (directory) {
+    var resolved = fluid.module.resolvePath(directory);
+    fs.readdirSync(resolved).forEach(function (filename) {
+        fluid.dataPipeline.load(resolved + "/" + filename);
+    });
+};
+
+/** Execute a loaded "run configuration" for a particular pipeline run
+ * @param {Object} config - The run configuration to be loaded, containing members
+ *     {String|String[]} config.loadDirectory - [optional] A directory or list of directories in which all pipeline files are to be loaded
+ *     {String|String[]} config.loadPipeline - [optional] A filename of a pipeline file to be loaded
+ *     {String|String[]} config.execPipeline - A single or multiple grade names of the pipeline to be executed
+ * @return {fluid.dataPipeline} The loaded and running pipeline
+ */
+fluid.dataPipeline.execRunConfig = function (config) {
+    fluid.makeArray(config.loadDirectory).forEach(fluid.dataPipeline.loadAll);
+    fluid.makeArray(config.loadPipeline).forEach(fluid.dataPipeline.load);
+    return fluid.dataPipeline.build(config.execPipeline);
+};
+
+/** Execute a "run configuration" from the specified filesystem path
+ * @param {String} filename - A potentially module-qualified filename holding a pipeline run configuration as JSON or JSON5
+ * @return {fluid.dataPipeline} The loaded and running pipeline
+ */
+fluid.dataPipeline.execFSRunConfig = function (filename) {
+    var resolved = fluid.module.resolvePath(filename);
+    var config = fluid.data.readJSONSync(resolved, "Loading pipeline run configuration");
+    return fluid.dataPipeline.execRunConfig(config);
+};
+
+/** The CLI driver function for running a data pipeline. This interprets the pipeline completion result and converts it
+ * to a successful or failed process exit
+ * @param {String} filename - A potentially module-qualified filename holding a pipeline run configuration as JSON or JSON5
+ * @return {fluid.dataPipeline} The loaded and running pipeline
+ */
+fluid.dataPipeline.runCLI = function (filename) {
+    var pipeline = fluid.dataPipeline.execFSRunConfig(filename);
+
+    pipeline.completionPromise.then(function () {
+        console.log("Pipeline executed successfully");
+    }, function (err) {
+        console.log("Pipeline execution error", err);
+        if (!err.softAbort) {
+            process.exit(-1);
+        }
+    });
+    return pipeline;
+};
 
 /**
  * The results of navigation via fluid.data.getPenultimate. An intermediate result of what would be the computation fluid.get(root, segs). The
@@ -503,30 +606,6 @@ fluid.data.mergeElements = function (layers) {
     return mergedComponents;
 };
 
-/** Load all the pipeline definitions in a supplied directory into Infusion grade structures
- * @param {String} directory - An Infusion module-qualified directory name from which all directly nested files will be loaded
- */
-fluid.data.loadAllPipelines = function (directory) {
-    var resolved = fluid.module.resolvePath(directory);
-    fs.readdirSync(resolved).forEach(function (filename) {
-        var defaults = fluid.data.readJSONSync(resolved + "/" + filename, "Loading pipeline definition");
-        fluid.data.registerPipeline(defaults);
-    });
-};
-
-/** Load a pipeline merging the supplied pipeline grade names --- these must already have been loaded as Infusion defaults.
- * This will construct and return a pipeline component which will begin to load immediately. Completion will be signalled
- * by the top-level member `completionPromise`, yielding any final output `ProvenancedTable`, although it is expected that
- * this will be in practice delivered to some side-effect yielding final pipeline member.
- * @param {String|String[]} types - The pipeline grades to be merged and loaded.
- * @return {fluid.dataPipeline} The instantiated pipeline component
- */
-fluid.data.loadPipeline = function (types) {
-    var that = fluid.dataPipeline({
-        gradeNames: types
-    });
-    return that;
-};
 
 fluid.data.flatProvenance = function (data, provenanceKey) {
     return fluid.transform(data, function (row) {
@@ -546,7 +625,7 @@ fluid.defaults("fluid.octokit", {
     }
 });
 
-fluid.defaults("fluid.datapipe.withOctokit", {
+fluid.defaults("fluid.dataPipe.withOctokit", {
     gradeNames: "fluid.dataPipe"
 });
 
@@ -650,7 +729,7 @@ fluid.filePathToProvenancePath = function (options) {
 
 
 /**
- * Representation of a pathed file and its contents (generally on its way to be written, e.g. by gitOps. commitMultipleFiles
+ * Representation of a pathed file and its contents (generally on its way to be written, e.g. by gitOpsApi's commitMultipleFiles
  * @typedef {Object} FileEntry
  * @param {String} path - The path of the data to be written
  * @param {String} content - The content of the data to be written
@@ -761,18 +840,24 @@ fluid.defaults("fluid.dataPipe.gitFileNotExists", {
  * If the file does not exist, the promise will resolve.
  */
 fluid.dataPipe.gitFileNotExists = async function (options) {
-    var promise = gitOpsApi.fetchRemoteFile(options.octokit, {
+    var coords = {
         repoOwner: options.repoOwner,
         repoName: options.repoName,
         branchName: options.branchName,
         filePath: options.filePath
-    });
+    };
+    var promise = gitOpsApi.fetchRemoteFile(options.octokit, coords);
+    console.log("Checking for existence of file ", coords);
     var togo = fluid.promise();
     promise.then(function (res) {
         if (!res.exists) { // The nonexistence of the file is converted to a resolution which continues the pipeline
             togo.resolve(res);
         } else { // The existence of the file is converted to a rejection which aborts the pipeline
-            togo.reject(res);
+            togo.reject({
+                exists: true,
+                softAbort: true, // Interpreted by CLI driver to not set process exit error
+                message: "File at path " + coords.filePath + " already exists"
+            });
         }
     }, function (err) {
         togo.reject(err);

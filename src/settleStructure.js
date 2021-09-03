@@ -5,6 +5,7 @@
 var fluid = require("infusion");
 
 // Taken from %bagatelle/src/utils/settleStructure.js
+// Currently unused - see comment in dataPipeline.js fluid.dataPipeWrapper.computeWaitSet
 
 fluid.settleStructure = function (structure) {
     if (fluid.isPromise(structure)) {

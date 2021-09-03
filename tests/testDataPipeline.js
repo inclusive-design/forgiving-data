@@ -51,8 +51,8 @@ fluid.tests.dataPipeline.testOutput = async function (options) {
 
 jqUnit.test("Test merging pipeline", function () {
     jqUnit.expect(2);
-    fluid.data.loadAllPipelines("%forgiving-data/tests/pipelines");
+    fluid.dataPipeline.loadAll("%forgiving-data/tests/pipelines");
 
-    var pipeline = fluid.data.loadPipeline(["fluid.tests.pipelines.truncateDate", "fluid.tests.pipelines.testOutput"]);
+    var pipeline = fluid.dataPipeline.build(["fluid.tests.pipelines.truncateDate", "fluid.tests.pipelines.testOutput"]);
     return pipeline.completionPromise;
 });

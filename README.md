@@ -20,7 +20,7 @@ along with noting its provenance as genuine.
 
 Run the sample pipeline by running
 
-    node driver.js
+    node demoDriver.js
 
 ## What does it contain?
 
@@ -273,7 +273,7 @@ the merge, resolves the resulting provenance, and adds a fresh record into `prov
 element sourced the data from itself.
 
 There is a sample pipeline element `fluid.covidMap.inventAccessibilityData` implementing `fluid.overlayProvenancePipe` that
-synthesizes accessibility data as part of the sample `driver.js` pipeline.
+synthesizes accessibility data as part of the sample `demoDriver.js` pipeline.
 
 ##### fluid.selfProvenancePipe
 
@@ -286,7 +286,7 @@ The builtin element `fluid.fetchGitCSV` is of this kind.
 #### Loading and running the pipeline
 
 The pipeline structure is loaded by using `fluid.data.loadAllPipelines` and then executed via `fluid.data.loadPipeline`
-as per the sample in `driver.js` - e.g.
+as per the sample in `demoDriver.js` - e.g.
 
 ````javascript
 fluid.data.loadAllPipelines("%forgiving-data/pipelines");
