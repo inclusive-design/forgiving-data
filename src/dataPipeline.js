@@ -465,7 +465,8 @@ fluid.dataPipeline.build = function (types) {
  * @param {String} filename - An Infusion module-qualified pipeline definition file to be loaded
  */
 fluid.dataPipeline.load = function (filename) {
-    var defaults = fluid.data.readJSONSync(filename, "Loading pipeline definition");
+    var resolved = fluid.module.resolvePath(filename);
+    var defaults = fluid.data.readJSONSync(resolved, "Loading pipeline definition");
     fluid.dataPipeline.register(defaults);
 };
 

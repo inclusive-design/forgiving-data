@@ -7,8 +7,6 @@
             input: "{joined}.data",
             filePath: "outputData/output.csv",
             writeProvenance: true
-            // provenance: "provenance.csv",
-            // provenanceMap: "provenanceMap.json"
         }
     }
 }
