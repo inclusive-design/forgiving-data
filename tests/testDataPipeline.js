@@ -53,6 +53,6 @@ jqUnit.test("Test merging pipeline", function () {
     jqUnit.expect(2);
     fluid.dataPipeline.loadAll("%forgiving-data/tests/pipelines");
 
-    var pipeline = fluid.dataPipeline.build(["fluid.tests.pipelines.truncateDate", "fluid.tests.pipelines.testOutput"]);
+    var pipeline = fluid.dataPipeline.build(["fluid.tests.pipelines.testOutput", "fluid.tests.pipelines.truncateDate"]);
     return pipeline.completionPromise;
 });

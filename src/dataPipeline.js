@@ -555,7 +555,7 @@ fluid.data.getPenultimate = function (root, segs) {
     };
 };
 
-/** Do the work of STRUCTURAL PROMOTION for "short" records that are found to the right of
+/** Do the work of STRUCTURAL PROMOTION for "short" records that are found to the left of
  * of a taller one. So far we have discovered a `fluid.compoundElement` at path `path` and index `currentLayer` and we
  * now scan elements to the right which are not compound in order to upgrade them.
  * @param {Object[]} layers - The unmerged `layers` records found within the `fluid.compoundElement` parent's merging options.
@@ -564,7 +564,7 @@ fluid.data.getPenultimate = function (root, segs) {
  * @param {String[]} path - Array of path segments of the location at which the compound element was found
  */
 fluid.data.upgradeElements = function (layers, currentLayer, path) {
-    for (var i = currentLayer + 1; i < layers.length; ++i) {
+    for (var i = currentLayer - 1; i >= 0; --i) {
         var thisLayer = layers[i];
         var pen = fluid.data.getPenultimate(thisLayer, path);
         var current = pen.root;
@@ -586,8 +586,8 @@ fluid.data.upgradeElements = function (layers, currentLayer, path) {
  * @return {Object} A merged hash of element definitions, also converted into standard Infusion grade definitions
  */
 fluid.data.mergeElements = function (layers) {
-    // Elements on the left composite on top of elements to the right
-    for (var i = 0; i < layers.length; ++i) {
+    // Elements on the right composite on top of elements to the left
+    for (var i = layers.length - 1; i >= 0; --i) {
         var layer = layers[i];
         var path = [];
         fluid.each(layer, function (record, key) { // eslint-disable-line no-loop-func
