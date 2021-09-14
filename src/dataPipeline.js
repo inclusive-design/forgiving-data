@@ -483,14 +483,16 @@ fluid.dataPipeline.loadAll = function (directory) {
 /** Execute a loaded "run configuration" for a particular pipeline run
  * @param {Object} config - The run configuration to be loaded, containing members
  *     {String|String[]} config.loadDirectory - [optional] A directory or list of directories in which all pipeline files are to be loaded
- *     {String|String[]} config.loadPipeline - [optional] A filename of a pipeline file to be loaded
- *     {String|String[]} config.execPipeline - A single or multiple grade names of the pipeline to be executed
+ *     {String|String[]} config.loadPipeline - [optional] One or more filenames of pipeline files to be loaded
+ *     {String} config.execPipeline - A single grade name of the pipeline to be executed
+ *     {String[]} config.execMergedPipeline - Multiple names of grades of pipeline to be merged together to be executed
  * @return {fluid.dataPipeline} The loaded and running pipeline
  */
 fluid.dataPipeline.execRunConfig = function (config) {
     fluid.makeArray(config.loadDirectory).forEach(fluid.dataPipeline.loadAll);
     fluid.makeArray(config.loadPipeline).forEach(fluid.dataPipeline.load);
-    return fluid.dataPipeline.build(config.execPipeline);
+    var grades = fluid.makeArray(config.execPipeline).concat(config.execMergedPipeline);
+    return fluid.dataPipeline.build(grades);
 };
 
 /** Execute a "run configuration" from the specified filesystem path

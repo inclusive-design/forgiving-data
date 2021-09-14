@@ -131,8 +131,8 @@ its options as follows:
     repoName: {String} The repo name.
     [branchName]: {String} [optional] The name of the remote branch to operate.
     filePath: {String} The location of the file including the path and the file name.
-    octokit: {Octokit} The octokit instance holding GitHub credentials - this option is supplied automatically
-                       by the pipeline
+    octokit: {fluid.octokit} The octokit instance holding GitHub credentials - the user does not need to supply
+        this option, it is filled in automatically by the pipeline
 }
 ````
 
@@ -253,7 +253,7 @@ Accepts options:
     branchName: {String} [optional] The name of the remote branch to operate.
     commitMessage: {String} The message to be attached to the GitHub commit
     files: {TransformableFileEntry[]} An array of files to be written  
-    octokit: {Octokit} The octokit instance holding GitHub credentials - this option is supplied automatically 
+    octokit: {fluid.octokit} The octokit instance holding GitHub credentials - this option is supplied automatically 
                        by the pipeline
 ````
 
@@ -283,6 +283,10 @@ Alternatively, you can configure an Octokit instance without authentication usin
 This is suitable for lightweight local testing but note that GitHub will limit the use of such requests to 60 per hour
 as described at [Resources in the REST API](https://docs.github.com/en/rest/overview/resources-in-the-rest-api).
 
+Either of `fluid.pipelines.withOctokit` or `fluid.pipelines.withUnauthOctokit` will construct a `{fluid.octokit}`
+instance in the pipeline that can be resolved by pipeline elements such as `fluid.fetchGitCSV`,
+`fluid.dataPipe.commitMultipleFiles`, etc.
+
 #### Running a pipeline using a run configuration
 
 The library supports a simple JSON structure which allows for the encoding of a particular pipeline run - that is,
@@ -294,8 +298,8 @@ which pipelines should be loaded and merged together. This can then be executed 
     loadDirectory: {String|String[]} [optional] - One or an array of module-qualified names of directories in which
                                      all files are to be loaded as pipelines
     loadPipeline: {String|String[]} [optional] One or an array of module-qualified names of individual pipeline
-    execPipeline: {String|String[]} One or an array of pipeline grade names, loaded by the above directives, which
-                                    will be merged together and executed
+    execPipeline: {String} A single pipeline grade names, loaded by the above directives, which will be executed
+    execMergedPipeline: {String[]} Multiple pipeline grade names which will be merged together and executed
 ````
 
 For example, the embedded demo driver at [demoDriver](../demo/runDemo.json5) looks as follows:
@@ -304,14 +308,39 @@ For example, the embedded demo driver at [demoDriver](../demo/runDemo.json5) loo
 { // Run configuration file for demonstration pipeline
   // Can be run directly from command line via runFluidPipeline %forgiving-data/runDemo.json5
     loadDirectory: "%forgiving-data/demo/pipelines",
-    execPipeline: ["fluid.pipelines.WeCount-ODC-synthetic", "fluid.pipelines.WeCount-ODC-fileOutput"]
+    execMergedPipeline: ["fluid.pipelines.WeCount-ODC-synthetic", "fluid.pipelines.WeCount-ODC-fileOutput"]
 }
 ````
 
-For example, this could be from an npm script for a package of which `forgiving-data` is a dependency (or directly
-from the command line if `forgiving-data` is installed as a global module) by the following:
+Here are some possible ways of running this run configuration:
 
-    runFluidPipeline %forgiving-data/runDemo.json5
+##### As an npm script of a module for which `forgiving-data` is a dependency
+
+````text
+    "scripts": {
+        "runFluidPipeline": "runFluidPipeline %forgiving-data/demo/runDemo.json5",
+    }
+````
+
+From the hosting module you can then run
+
+    npm run runFluidPipeline
+
+##### If forgiving-data is installed as a global module using npm install -g forgiving-data
+
+    runFluidPipeline %forgiving-data/demo/runDemo.json5
+
+##### Via a local npm script as provided in this module
+
+````text
+    "scripts": {
+        "runFluidPipeline": "node src/cli.js"
+    }
+````
+
+From this module you can then run
+
+    npm run runFluidPipeline -- %forgiving-data/demo/runDemo.json5
 
 Note that module-qualified references such as `%forgiving-data/runDemo.json5` are described in the Infusion API
 page on [fluid.module.resolvePath](https://docs.fluidproject.org/infusion/development/nodeapi#fluidmoduleresolvepathpath).
