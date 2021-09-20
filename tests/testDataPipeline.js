@@ -4,9 +4,7 @@
 
 var fluid = require("infusion");
 
-require("../src/forgivingJoin.js");
-require("../src/CSVResource.js");
-require("../src/dataPipeline.js");
+require("../index.js");
 
 var jqUnit = fluid.require("node-jqunit");
 require("./testUtils/testUtils.js");
@@ -20,7 +18,7 @@ fluid.tests.dataPipeline.truncateDate = function (options) {
     var truncatedData = fluid.transform(rows, function (row) {
         var date = new Date(row.observationDate);
         return {
-            observationDate: date.toLocaleDateString("en-CA") // This actually agrees with ISO-8601 for the date segment
+            observationDate: date.toISOString().substring(0, 10)
         };
     });
     console.log("Outputting data ", truncatedData);
@@ -36,6 +34,10 @@ fluid.defaults("fluid.tests.dataPipeline.truncateDate", {
     gradeNames: "fluid.overlayProvenancePipe"
 });
 
+fluid.defaults("fluid.tests.dataPipeline.testOutput", {
+    gradeNames: "fluid.dataPipe"
+});
+
 fluid.tests.dataPipeline.testOutput = async function (options) {
     var input = options.input;
 
@@ -44,17 +46,13 @@ fluid.tests.dataPipeline.testOutput = async function (options) {
 
     // console.log("Got output ", JSON.stringify(rows, null, 2));
     jqUnit.assertDeepEq("Expected pipeline output", expectedJoin.data, input.value.data);
-    jqUnit.assertDeepEq("Expected output provenance", expectedProvenance.data, input.provenance);
+    jqUnit.assertDeepEq("Expected output provenance", expectedProvenance.data, input.provenance.data);
 };
-
-fluid.defaults("fluid.tests.dataPipeline.testOutput", {
-    gradeNames: "fluid.dataPipe"
-});
 
 jqUnit.test("Test merging pipeline", function () {
     jqUnit.expect(2);
-    fluid.data.loadAllPipelines("%forgiving-data/tests/pipelines");
+    fluid.dataPipeline.loadAll("%forgiving-data/tests/pipelines");
 
-    var pipeline = fluid.data.loadPipeline(["fluid.tests.pipelines.truncateDate", "fluid.tests.pipelines.testOutput"]);
+    var pipeline = fluid.dataPipeline.build(["fluid.tests.pipelines.testOutput", "fluid.tests.pipelines.truncateDate"]);
     return pipeline.completionPromise;
 });

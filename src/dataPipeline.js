@@ -4,27 +4,24 @@
 
 var fluid = require("infusion");
 var fs = require("fs"),
+    axios = require("axios"),
     path = require("path");
 var octokitCore = require("@octokit/core");
 
-var octokit = new octokitCore.Octokit({
-//  auth: access_token
-});
-
 var gitOpsApi = require("git-ops-api");
 
-require("./readJSON.js");
-require("./settleStructure.js");
+require("./JSONEncoding.js");
 require("./tangledMat.js");
 
 fluid.registerNamespace("fluid.data");
+fluid.registerNamespace("fluid.dataPipe");
 
 /**
- * A layer structure as stored within a fluid.tangledMat.
+ * A provenanced CSV value
  * @typedef {Object} ProvenancedTable
- * @property {Object<String, String>[]} value - Array of CSV row values
- * @property {Object<String, String>[]} provenanceMap - Isomorphic to `value` - an array of provenance records for each row
- * @property {Object} provenanceMap A map of provenance strings to records resolving the provenance - either a dataset record or another pipeline record
+ * @property {CSVValue} value - CSV value stored as entries {headers, data}
+ * @property {Object<String, String>[]} provenanceMap - Isomorphic to `value.data` - an array of provenance records for each row
+ * @property {Object} provenanceMap - A map of provenance strings to records resolving the provenance - either a dataset record or another pipeline record
  */
 
 /** Hierarchy for primitive dataPipes based around simple functions **/
@@ -116,8 +113,23 @@ fluid.defaults("fluid.compoundElement", {
 // A grade for an entire pipeline - just as a marker grade since there is no additional functionality beyond fluid.compoundElement
 
 fluid.defaults("fluid.dataPipeline", {
-    gradeNames: "fluid.compoundElement"
+    gradeNames: "fluid.compoundElement",
+    mergePolicy: {
+        require: {
+            noexpand: true,
+            func: fluid.arrayConcatPolicy
+        }
+    },
+    evaluateRequire: "@expand:fluid.dataPipeline.evaluateRequire({that}.options.require)"
+    // require: String|String[] for code to be loaded on startup
 });
+
+fluid.dataPipeline.evaluateRequire = function (requires) {
+    fluid.each(requires, function (require) {
+        fluid.require(require);
+    });
+    return true;
+};
 
 /** Determine which is the pipeline element which will form the output of this compound element, and bind our own completion
  * promise to its one
@@ -153,26 +165,34 @@ fluid.compoundElement.waitCompletion = function (that) {
 };
 
 /** Compute data dependencies of this element by traversing its configuration recursively.
+ * @param {fluid.component} that - The component representing the element
  * @param {Object} options - The element's options
  * @param {Object[]} waitSet - The waitSet to be computed. **This is supplied as an empty array and populated by this function**
  * @param {String[]} segs - The array of path segments to the traversed options **This is supplied as an empty array and is modified by this function**
  * @return {Object} The supplied options, with any references to data dependencies censored - this is suitable for use as a provenance record
  */
-fluid.data.findWaitSet = function (options, waitSet, segs) {
+fluid.data.findWaitSet = function (that, options, waitSet, segs) {
     return fluid.transform(options, function (value, key) {
         var togo;
         segs.push(key);
         // TODO: In future configuration might include "safe" references to non-data - we should resolve the component
         // here and determine whether this really is a data dependency
         if (fluid.isIoCReference(value)) {
-            waitSet.push({
-                ref: value,
-                parsed: fluid.parseContextReference(value),
-                path: fluid.copy(segs)
-            });
-            togo = fluid.NO_VALUE;
+            var parsed = fluid.parseContextReference(value);
+            parsed.segs = fluid.model.parseEL(parsed.path);
+            var isData = parsed.segs[0] === "data";
+            if (isData) {
+                waitSet.push({
+                    ref: value,
+                    parsed: parsed,
+                    sourceSegs: fluid.copy(segs)
+                });
+                togo = fluid.NO_VALUE;
+            } else {
+                togo = fluid.expandImmediate(value, that);
+            }
         } else if (fluid.isPlainObject(value)) {
-            togo = fluid.data.findWaitSet(value, waitSet, segs);
+            togo = fluid.data.findWaitSet(that, value, waitSet, segs);
         } else {
             togo = value;
         }
@@ -219,27 +239,32 @@ fluid.isParentComponent = function (parent, child) {
  * it are then resolved onto components by means of a modified version of Infusion's core algorithm (see slide
  * 16 of https://docs.google.com/presentation/d/12vLg_zWS6uXaHRy8LWQLzfNPBYa1E6L-WWyLqH1iWJ4 ). Finally, a promise sequence
  * which waits for completion of all of these dependencies is bound to a firing of the component's `launchPipe` event.
+ * As a side-effect, this function also computes the `provenanceRecord' member which is assigned as a top-level member
+ * of the component - this consists of its `innerOptions` record with all data dependencies censored, and the `innerType`
+ * member of `innerOptions` assigned to its member `type` (corresponding to the original `type` member of the pipeline
+ * element).
  * @param {fluid.dataPipeWrapper} that - The component for which the waitSet is to be computed
  */
 fluid.dataPipeWrapper.computeWaitSet = function (that) {
     var waitSet = [];
-    that.provenanceRecord = fluid.data.findWaitSet(that.options.innerOptions, waitSet, []);
+    that.provenanceRecord = fluid.data.findWaitSet(that, that.options.innerOptions, waitSet, []);
+    // TODO: Naturally we would like to be more accurate about this - we would like to locate where the code sits
+    // implementing this grade, and then locate which revision of it was executed
     that.provenanceRecord.type = that.options.innerType;
     that.waitSet = waitSet;
     var waitCompletions = fluid.transform(waitSet, function (oneWait) {
         var resolved = fluid.resolveContext(oneWait.parsed.context, that);
-        var failMid = "context reference " + oneWait.ref + " to a component at path " + oneWait.parsed.path + " in dataPipe options " + JSON.stringify(that.options.innerOptions, null, 2);
         if (!resolved) {
-            fluid.fail("Computing waitSet of " + fluid.dumpComponentAndPath(that) + ": could not resolve data reference " + failMid + " to a component");
+            fluid.fail("Computing waitSet of " + fluid.dumpComponentAndPath(that) + ": could not resolve context reference {" + oneWait.parsed.context + "} to a component");
         }
         // Special-case this context resolution to, e.g. resolve by priority onto joined.joined, contrary to standard Infusion scoping rules
         if (fluid.isParentComponent(resolved, that)) {
             resolved = resolved[oneWait.parsed.context] || resolved;
         }
-        if (!resolved.completionPromise) {
-            fluid.fail("Resolved " + failMid + " to a non dataPipe component");
-        }
         oneWait.target = resolved;
+        if (!resolved.completionPromise) {
+            fluid.fail("Resolved {" + oneWait.parsed.context + "} to a non dataPipe component");
+        }
         return resolved.completionPromise;
     });
     console.log("Component at path " + fluid.pathForComponent(that) + " waiting on set " + fluid.getMembers(waitSet, "parsed.context"));
@@ -248,7 +273,7 @@ fluid.dataPipeWrapper.computeWaitSet = function (that) {
     allCompletions.then(function () {
         console.log("Wait complete for component at path " + fluid.pathForComponent(that) + " - launching");
         that.events.launchPipe.fire();
-    });
+    }); // TODO: in the case of a rejection, launch some variant error process that perhaps allows rescuing
 };
 
 /** Determines the path of a pipeline element within its parent pipeline. This is useful for computing provenance keys
@@ -283,7 +308,7 @@ fluid.dataPipeWrapper.interpretPipeResult = function (result, provenanceKey, opt
 
         var mat = fluid.tangledMat([{
             value: input.value.data,
-            provenance: input.provenance,
+            provenance: input.provenance.data,
             name: "input"}, {
             value: result.value.data,
             name: provenanceKey
@@ -292,8 +317,10 @@ fluid.dataPipeWrapper.interpretPipeResult = function (result, provenanceKey, opt
             data: mat.evaluateFully([]),
             headers: input.value.headers
         };
-        console.log("Overlay value ", result.value);
-        result.provenance = mat.getProvenance();
+        result.provenance = {
+            data: mat.getProvenance(),
+            headers: input.value.headers
+        };
         result.provenanceKey = provenanceKey;
         result.provenanceMap = fluid.extend({}, input.provenanceMap, {
             [provenanceKey]: that.provenanceRecord
@@ -307,6 +334,19 @@ fluid.dataPipeWrapper.interpretPipeResult = function (result, provenanceKey, opt
     return result;
 };
 
+/** Produce an "isomorphic skeleton" of a deeply structured object, preserving its container structure but omitting
+ *  any primitive values at the leaves.
+ * @param {Any} tocopy - The value to be copied
+ * @return {Any} The skeleton of the copied value
+ */
+fluid.data.makeSkeleton = function (tocopy) {
+    if (fluid.isPrimitive(tocopy)) {
+        return fluid.NO_VALUE;
+    } else {
+        return fluid.transform(tocopy, fluid.data.makeSkeleton);
+    }
+};
+
 /** Launch the `fluid.dataPipe` function wrapped within a `fluid.dataPipeWrapper` by resolving its input options
  * with respect to the `waitSet` computed by `fluid.dataPipeWrapper.computeWaitSet`, and then interpreting its
  * output into a data provenance record by means of fluid.dataPipeWrapper.interpretPipeResult. This result is then
@@ -314,13 +354,20 @@ fluid.dataPipeWrapper.interpretPipeResult = function (result, provenanceKey, opt
  * @param {fluid.dataPipeWrapper} that - The `fluid.dataPipeWrapper` element to be launched
  */
 fluid.dataPipeWrapper.launch = function (that) {
-    var overlay = {};
+    var overlay = fluid.data.makeSkeleton(that.provenanceRecord);
     fluid.each(that.waitSet, function (oneWait) {
-        var fetched = fluid.get(oneWait.target, oneWait.parsed.path);
-        fluid.set(overlay, oneWait.path, fetched);
+        var fetched = fluid.get(oneWait.target, oneWait.parsed.segs);
+        fluid.set(overlay, oneWait.sourceSegs, fetched);
     });
     var provenanceKey = fluid.data.pathWithinPipeline(that).join(".");
-    var expanded = fluid.extend(true, {}, that.options.innerOptions, overlay);
+
+    var upDefaults = fluid.defaults(that.options.innerType);
+    // TODO: Upgrade to an extensible interpretation system
+    if (fluid.hasGrade(upDefaults, "fluid.dataPipe.withOctokit")) {
+        var octokitComponent = fluid.resolveContext("fluid.octokit", that);
+        fluid.set(overlay, "octokit", octokitComponent.octokit);
+    }
+    var expanded = fluid.extend(true, {}, that.provenanceRecord, overlay);
     expanded.provenanceKey = provenanceKey;
     expanded.provenanceRecord = that.provenanceRecord;
     var result = fluid.invokeGlobalFunction(that.options.innerType, [expanded]);
@@ -331,10 +378,37 @@ fluid.dataPipeWrapper.launch = function (that) {
     fluid.promise.follow(promiseTogo, that.completionPromise);
 };
 
-/** Convert an `elements` style definition found as the options to a `fluid.dataPipeComponent` into a definitions
+
+/** Convert any top-level options definitions in a grade definition into "members" to that they can be referenced
+ * as top-level material. This is forward-looking to Infusion 6 where there will no longer be such a silly distinction
+ * as "options" vs any other material - see https://issues.fluidproject.org/browse/FLUID-5750 for details of the
+ * "options flattening revolution".
+ * This function distinguishes between component and `fluid.dataPipe` style pipes by means of the `innerOptions`
+ * argument.
+ * @param {Object} record - The original options record supplied to the `element`.
+ * @param {Boolean} innerOptions - `true` if this is a `fluid.dataPipe` definition and we instead need to promote
+ * options from the inner `innerOptions` record within the supplied record rather than its own top-level entries.
+ * @return {Object} A set of options suitable to be overlaid onto a {type: ... , options: ... } record
+ * for Infusion 1-5 style component construction.
+ */
+fluid.data.optionsToMembers = function (record, innerOptions) {
+    var nonCore = innerOptions ? record.options.innerOptions : fluid.censorKeys(record.options, ["elements", "gradeNames", "require"]);
+    var memberOptions = {
+        members: fluid.transform(nonCore, function (value, key) {
+            return "{that}.options." + (innerOptions ? "innerOptions." : "") + key;
+        })
+    };
+    return fluid.extend(true, {
+        options: memberOptions
+    }, record);
+};
+
+/** Convert an `elements` style definition found as the options to a `fluid.dataPipeComponent` into a definition
  * interpretable as an Infusion subcomponent definition -
  * - `parents` are converted to `gradeNames`
  * - Options are unflattened with all elements other than `type` shifted into `options`
+ * - Any non-core options are additionally converted into `members` definitions allowing them to be referenced from the
+ * top level of the component
  * - Any primitive `fluid.dataPipe` definitions are housed inside `fluid.dataPipeWrapper` components
  * This is invoked either by top-level `fluid.data.registerPipeline` or by the `fluid.data.mergeElements` promotion algorithm
  * @param {Object} element - `element`-style configuration for the pipeline
@@ -352,29 +426,103 @@ fluid.data.elementToGrade = function (element, baseGrade) {
     togo.options.gradeNames = gradeNames;
     var upDefaults = baseGrade ? fluid.defaults(baseGrade) : fluid.getMergedDefaults(element.type, gradeNames);
     if (fluid.hasGrade(upDefaults, "fluid.component")) {
-        return togo;
+        return fluid.data.optionsToMembers(togo, false);
     } else {
-        return {
+        return fluid.data.optionsToMembers({
             type: "fluid.dataPipeWrapper",
             options: {
                 innerType: togo.type,
                 innerOptions: togo.options
             }
-        };
+        }, true);
     }
-
-    return togo;
 };
 
 /** Register a pipeline definition as loaded in from JSON as an Infusion grade definition by converting it via `fluid.data.elementToGrade`.
  * @param {Object} pipeline - The top-level pipeline definition as loaded from JSON
  */
-fluid.data.registerPipeline = function (pipeline) {
+fluid.dataPipeline.register = function (pipeline) {
     var rec = fluid.data.elementToGrade(pipeline, "fluid.dataPipeline");
     console.log("Registering ", rec.options, " under type ", rec.type);
     fluid.defaults(rec.type, rec.options);
 };
 
+/** Load and construct a pipeline merging the supplied pipeline grade names --- these must already have been loaded as Infusion defaults.
+ * This will construct and return a pipeline component which will begin to load immediately. Completion will be signalled
+ * by the top-level member `completionPromise`, yielding any final output {ProvenancedTable}, although it is expected that
+ * this will be in practice delivered to some side-effect yielding final pipeline member.
+ * @param {String|String[]} types - The pipeline grades to be merged and loaded.
+ * @return {fluid.dataPipeline} The instantiated pipeline component
+ */
+fluid.dataPipeline.build = function (types) {
+    var that = fluid.dataPipeline({
+        gradeNames: types
+    });
+    return that;
+};
+
+/** Load a single pipeline definition file into an Infusion grade structures
+ * @param {String} filename - An Infusion module-qualified pipeline definition file to be loaded
+ */
+fluid.dataPipeline.load = function (filename) {
+    var resolved = fluid.module.resolvePath(filename);
+    var defaults = fluid.data.readJSONSync(resolved, "Loading pipeline definition");
+    fluid.dataPipeline.register(defaults);
+};
+
+/** Load all the pipeline definitions in a supplied directory into Infusion grade structures
+ * @param {String} directory - An Infusion module-qualified directory name from which all directly nested files will be loaded
+ */
+fluid.dataPipeline.loadAll = function (directory) {
+    var resolved = fluid.module.resolvePath(directory);
+    fs.readdirSync(resolved).forEach(function (filename) {
+        fluid.dataPipeline.load(resolved + "/" + filename);
+    });
+};
+
+/** Execute a loaded "run configuration" for a particular pipeline run
+ * @param {Object} config - The run configuration to be loaded, containing members
+ *     {String|String[]} config.loadDirectory - [optional] A directory or list of directories in which all pipeline files are to be loaded
+ *     {String|String[]} config.loadPipeline - [optional] One or more filenames of pipeline files to be loaded
+ *     {String} config.execPipeline - A single grade name of the pipeline to be executed
+ *     {String[]} config.execMergedPipeline - Multiple names of grades of pipeline to be merged together to be executed
+ * @return {fluid.dataPipeline} The loaded and running pipeline
+ */
+fluid.dataPipeline.execRunConfig = function (config) {
+    fluid.makeArray(config.loadDirectory).forEach(fluid.dataPipeline.loadAll);
+    fluid.makeArray(config.loadPipeline).forEach(fluid.dataPipeline.load);
+    var grades = fluid.makeArray(config.execPipeline).concat(config.execMergedPipeline);
+    return fluid.dataPipeline.build(grades);
+};
+
+/** Execute a "run configuration" from the specified filesystem path
+ * @param {String} filename - A potentially module-qualified filename holding a pipeline run configuration as JSON or JSON5
+ * @return {fluid.dataPipeline} The loaded and running pipeline
+ */
+fluid.dataPipeline.execFSRunConfig = function (filename) {
+    var resolved = fluid.module.resolvePath(filename);
+    var config = fluid.data.readJSONSync(resolved, "Loading pipeline run configuration");
+    return fluid.dataPipeline.execRunConfig(config);
+};
+
+/** The CLI driver function for running a data pipeline. This interprets the pipeline completion result and converts it
+ * to a successful or failed process exit
+ * @param {String} filename - A potentially module-qualified filename holding a pipeline run configuration as JSON or JSON5
+ * @return {fluid.dataPipeline} The loaded and running pipeline
+ */
+fluid.dataPipeline.runCLI = function (filename) {
+    var pipeline = fluid.dataPipeline.execFSRunConfig(filename);
+
+    pipeline.completionPromise.then(function () {
+        console.log("Pipeline executed successfully");
+    }, function (err) {
+        console.log("Pipeline execution error", err);
+        if (!err.softAbort) {
+            process.exit(-1);
+        }
+    });
+    return pipeline;
+};
 
 /**
  * The results of navigation via fluid.data.getPenultimate. An intermediate result of what would be the computation fluid.get(root, segs). The
@@ -409,7 +557,7 @@ fluid.data.getPenultimate = function (root, segs) {
     };
 };
 
-/** Do the work of STRUCTURAL PROMOTION for "short" records that are found to the right of
+/** Do the work of STRUCTURAL PROMOTION for "short" records that are found to the left of
  * of a taller one. So far we have discovered a `fluid.compoundElement` at path `path` and index `currentLayer` and we
  * now scan elements to the right which are not compound in order to upgrade them.
  * @param {Object[]} layers - The unmerged `layers` records found within the `fluid.compoundElement` parent's merging options.
@@ -418,7 +566,7 @@ fluid.data.getPenultimate = function (root, segs) {
  * @param {String[]} path - Array of path segments of the location at which the compound element was found
  */
 fluid.data.upgradeElements = function (layers, currentLayer, path) {
-    for (var i = currentLayer + 1; i < layers.length; ++i) {
+    for (var i = currentLayer - 1; i >= 0; --i) {
         var thisLayer = layers[i];
         var pen = fluid.data.getPenultimate(thisLayer, path);
         var current = pen.root;
@@ -440,8 +588,8 @@ fluid.data.upgradeElements = function (layers, currentLayer, path) {
  * @return {Object} A merged hash of element definitions, also converted into standard Infusion grade definitions
  */
 fluid.data.mergeElements = function (layers) {
-    // Elements on the left composite on top of elements to the right
-    for (var i = 0; i < layers.length; ++i) {
+    // Elements on the right composite on top of elements to the left
+    for (var i = layers.length - 1; i >= 0; --i) {
         var layer = layers[i];
         var path = [];
         fluid.each(layer, function (record, key) { // eslint-disable-line no-loop-func
@@ -461,30 +609,6 @@ fluid.data.mergeElements = function (layers) {
     return mergedComponents;
 };
 
-/** Load all the pipeline definitions in a supplied directory into Infusion grade structures
- * @param {String} directory - An Infusion module-qualified directory name from which all directly nested files will be loaded
- */
-fluid.data.loadAllPipelines = function (directory) {
-    var resolved = fluid.module.resolvePath(directory);
-    fs.readdirSync(resolved).forEach(function (filename) {
-        var defaults = fluid.data.readJSONSync(resolved + "/" + filename, "Loading pipeline definition");
-        fluid.data.registerPipeline(defaults);
-    });
-};
-
-/** Load a pipeline merging the supplied pipeline grade names --- these must already have been loaded as Infusion defaults.
- * This will construct and return a pipeline component which will begin to load immediately. Completion will be signalled
- * by the top-level member `completionPromise`, yielding any final output `ProvenancedTable`, although it is expected that
- * this will be in practice delivered to some side-effect yielding final pipeline member.
- * @param {String|String[]} types - The pipeline grades to be merged and loaded.
- * @return {fluid.dataPipeline} The instantiated pipeline component
- */
-fluid.data.loadPipeline = function (types) {
-    var that = fluid.dataPipeline({
-        gradeNames: types
-    });
-    return that;
-};
 
 fluid.data.flatProvenance = function (data, provenanceKey) {
     return fluid.transform(data, function (row) {
@@ -494,8 +618,58 @@ fluid.data.flatProvenance = function (data, provenanceKey) {
     });
 };
 
-fluid.defaults("fluid.fetchGitCSV", {
+fluid.defaults("fluid.octokit", {
+    gradeNames: "fluid.component",
+    octokitOptions: {
+        // auth: String
+    },
+    members: {
+        octokit: "@expand:fluid.makeOctokit({that}, {that}.options.octokitOptions)"
+    }
+});
+
+fluid.defaults("fluid.dataPipe.withOctokit", {
     gradeNames: "fluid.dataPipe"
+});
+
+fluid.makeOctokit = function (that, options) {
+    // TODO: Framework bug - because subcomponent records arrive via dynamicComponents total options their options
+    // do not get expanded properly.
+    var expanded = fluid.expandImmediate(options, that);
+    return new octokitCore.Octokit(expanded);
+};
+
+
+/** Assemble a return structure from a data source which is to be considered providing flat provenance - e.g.
+ * an external data source such fetch from a URL or unmanaged GitHub repository.
+ * @param {String} data - The data value fetched from the source, as a string
+ * @param {Object} options - The options structure governing the fetch - this should contain members, as
+ * supplied by `fluid.dataPipeWrapper.launch`,
+ *    {String} options.provenanceKey - The provenance key computed for this source
+ *    {Object} options.provenanceRecord - The provenance record derived from this source's options
+ * @param {Object} provenanceExtra - Extra provenance information supplied by the source - e.g. access time or
+ * commit info
+ * @return {ProvenancedTable} A provenancedTable structure
+ */
+fluid.flatProvenanceCSVSource = async function (data, options, provenanceExtra) {
+    var parsed = await fluid.data.parseCSV(data);
+    var provenanceKey = options.provenanceKey;
+    return {
+        value: parsed,
+        provenance: {
+            headers: parsed.headers,
+            data: fluid.data.flatProvenance(parsed.data, provenanceKey)
+        },
+        provenanceKey: provenanceKey,
+        provenanceMap: {
+            [options.provenanceKey]: fluid.extend(true, {}, options.provenanceRecord, provenanceExtra)
+        }
+    };
+};
+
+
+fluid.defaults("fluid.fetchGitCSV", {
+    gradeNames: "fluid.dataPipe.withOctokit"
 });
 
 //(from gitOpsApi.js)
@@ -506,9 +680,10 @@ fluid.defaults("fluid.fetchGitCSV", {
  * @param {String} repoName - The repo name.
  * @param {String} [branchName] - The name of the remote branch to operate.
  * @param {String} filePath - The location of the file including the path and the file name.
+ * @param {Octokit} octokit - The octokit instance to be used
  */
 
-// TODO: Refactor this as a DataSource + CSV decoder + provenance decoder, and produce a dedicated dataSourceDataPipe component
+// TODO: Refactor this as a DataSource + CV decoder + provenance decoder, and produce a dedicated dataSourceDataPipe component
 /** A function fetching a single CSV file from a GitHub repository URL. It will be returned as a barebones
  * `ProvenancedTable` with just a value. The provenance will be assumed to be filled in by the loader, e.g.
  * fluid.dataPipeWrapper
@@ -517,42 +692,178 @@ fluid.defaults("fluid.fetchGitCSV", {
  */
 fluid.fetchGitCSV = async function (options) {
     var commonOptions = fluid.filterKeys(options, ["repoOwner", "repoName", "filePath", "branchName"]);
+    var octokit = options.octokit;
     var result = await gitOpsApi.fetchRemoteFile(octokit, commonOptions);
-    var parsed = await fluid.resourceLoader.parsers.csv(result.content, {resourceSpec: {}});
     var commitInfo = await gitOpsApi.getFileLastCommit(octokit, commonOptions);
-    var provenanceKey = options.provenanceKey;
+    return fluid.flatProvenanceCSVSource(result.content, options, {
+        commitInfo: commitInfo
+    });
+};
+
+fluid.defaults("fluid.fetchUrlCSV", {
+    gradeNames: "fluid.dataPipe.withOctokit"
+});
+
+// TODO: Similarly turn into DataSource - and resolve our issues with promotion of encoding
+fluid.fetchUrlCSV = async function (options) {
+    let response = await axios.get(options.url);
+
+    return fluid.flatProvenanceCSVSource(response.data, options, {
+        fetchedAt: new Date().toISOString()
+    });
+};
+
+/** Accepts a structure holding a member `filePath`, and returns a shallow copy of it including additional
+ * members encoding relative paths `provenancePath` and `provenanceMapPath` which can be used to store provenenace
+ * and provenance map structures respectively.
+ * @param {Object} options - An options structure holding `filePath`
+ * @return {Object} A shallow copy of `options` including additional members encoding provenance paths
+ */
+fluid.filePathToProvenancePath = function (options) {
+    var filePath = options.filePath;
+    var extpos = filePath.lastIndexOf(".");
     return {
-        value: parsed,
-        provenance: fluid.data.flatProvenance(parsed.data, provenanceKey),
-        provenanceKey: provenanceKey,
-        provenanceMap: {
-            [options.provenanceKey]: fluid.extend(true, {}, options.provenanceRecord, {
-                commitInfo: commitInfo
-            })
-        }
+        ...options,
+        provenancePath: filePath.substring(0, extpos) + "-provenance.csv",
+        provenanceMapPath: filePath.substring(0, extpos) + "-provenanceMap.json"
     };
 };
 
-fluid.defaults("fluid.fileOutput", {
+
+
+/**
+ * Representation of a pathed file and its contents (generally on its way to be written, e.g. by gitOpsApi's commitMultipleFiles
+ * @typedef {Object} FileEntry
+ * @param {String} path - The path of the data to be written
+ * @param {String} content - The content of the data to be written
+ */
+
+/**
+ * An object that contains required information for fetching a file.
+ * @typedef {Object} ProvenancedTableWriteOptions
+ * @param {String} filePath - The path where the main data value is to be written
+ * @param {ProvenancedTable} input - The data to be written
+ * @param {Boolean} writeProvenance - `true` if provenance data is to be written alongside the supplied file in the same directory
+ */
+
+/** Converts a provenanced table record to data suitable for writing (e.g. either to the filesystem or as a
+ *  git commit).
+ * @param {ProvenancedTableWriteOptions} options - Options determining the data to be written
+ * @param {Function} encoder - A function to encode the supplied data
+ * @return {FileEntry[]} files - An array of objects. Each object contains a file information in a structure of
+ * [{path: {String}, content: {String}}, ...].
+ */
+fluid.provenancedDataToWritable = function (options, encoder) {
+    var input = options.input;
+    var files = [{
+        path: options.filePath,
+        content: encoder(input.value)
+    }];
+    if (options.writeProvenance) {
+        var provOptions = fluid.filePathToProvenancePath(options);
+        files.push({
+            path: provOptions.provenancePath,
+            content: encoder(input.provenance)
+        });
+        files.push({
+            path: provOptions.provenanceMapPath,
+            content: fluid.data.encodeJSON(input.provenanceMap)
+        });
+    }
+    return files;
+};
+
+/** Write a set of prepared file entries as files to the filesystem
+ * @param {FileEntry[]} entries - File entries to be written
+ */
+fluid.writeFileEntries = function (entries) {
+    entries.forEach(function (entry) {
+        var dirName = path.dirname(entry.path);
+        fs.mkdirSync(dirName, { recursive: true });
+        fs.writeFileSync(entry.path, entry.content);
+        console.log("Written " + entry.content.length + " bytes to " + entry.path);
+    });
+};
+
+fluid.defaults("fluid.csvFileOutput", {
     gradeNames: "fluid.dataPipe"
 });
 
 /** A pipeline entry which outputs a provenance record to a grouped set of files
- * @param {Object} options - The pipeline element's record in the configuration, including members
- *     {String} `path` holding the directory where the files are to be written
- *     {String} `value` holding the filename within `path` where the data is to be written as CSV
- *     {String} `provenance` holding the filename within `path` where the provenance data is to be written as CSV
- *     {String} `provenenceMap` holding the filename within `path` where the map of provenance strings to records is to be written as JSON
- *     {ProvenancedTable} input - The data to be written
+ * @param {ProvenancedTableWriteOptions} options - Options determining the data to be written
  */
-fluid.fileOutput = function (options) {
-    fs.mkdirSync(options.path, { recursive: true });
-    var input = options.input;
+fluid.csvFileOutput = function (options) {
+    var entries = fluid.provenancedDataToWritable(options, fluid.data.encodeCSV);
+    fluid.writeFileEntries(entries);
+};
 
-    fluid.data.writeCSV(path.join(options.path, options.value), input.value);
-    fluid.data.writeCSV(path.join(options.path, options.provenance), {
-        headers: input.value.headers,
-        data: input.provenance
+fluid.defaults("fluid.dataPipe.commitMultipleFiles", {
+    gradeNames: "fluid.dataPipe.withOctokit"
+});
+
+/** Commits multiple files into a github repository as a single commit, applying suitable encoding to the files to be
+ * written as well as any post-processing.
+ *
+ * @param {CommitMultipleFilesOptions} options - The options governing the files to be committed. The FileEntry options can contain
+ * extra entries
+ *     {String} encoder - Name of a global function encoding an individual file
+ *     {String|String[]} convertEntry - Name of a global function contributing further fileEntries to the collection
+ * @return {Promise} Promise for success or failure of the operation as returned from gitOpsApi.commitMultipleFiles
+ */
+fluid.dataPipe.commitMultipleFiles = async function (options) {
+    var entries = options.files.map(function (fileOptions) {
+        var encoder = fluid.getGlobalValue(fileOptions.encoder);
+        var innerEntries = fluid.provenancedDataToWritable(fileOptions, encoder);
+        var extras = fluid.transform(fluid.makeArray(fileOptions.convertEntry), function (converterName) {
+            var converter = fluid.getGlobalValue(converterName);
+            return converter(fileOptions, innerEntries);
+        });
+        return innerEntries.concat(extras);
     });
-    fluid.data.writeJSONSync(path.join(options.path, options.provenanceMap), input.provenanceMap);
+    var flatEntries = fluid.flatten(entries);
+    return gitOpsApi.commitMultipleFiles(options.octokit, {
+        repoOwner: options.repoOwner,
+        repoName: options.repoName,
+        branchName: options.branchName,
+        files: flatEntries,
+        commitMessage: options.commitMessage
+    });
+};
+
+
+fluid.defaults("fluid.dataPipe.gitFileNotExists", {
+    gradeNames: "fluid.dataPipe.withOctokit"
+});
+
+/** Converts the existence of a file in a Github repository into a rejection. Useful to abort a pipeline if a
+ * particular output exists already.
+ * @param {FetchRemoteFileOptions} options - Accepts a structure as for fetchGitCSV determining the coordinates of the file
+ * to be checked
+ * @return {Promise} A promise which rejects if the file with given coordinates exists already, or if an error occurs.
+ * If the file does not exist, the promise will resolve.
+ */
+fluid.dataPipe.gitFileNotExists = async function (options) {
+    var coords = {
+        repoOwner: options.repoOwner,
+        repoName: options.repoName,
+        branchName: options.branchName,
+        filePath: options.filePath
+    };
+    var promise = gitOpsApi.fetchRemoteFile(options.octokit, coords);
+    console.log("Checking for existence of file ", coords);
+    var togo = fluid.promise();
+    promise.then(function (res) {
+        if (!res.exists) { // The nonexistence of the file is converted to a resolution which continues the pipeline
+            togo.resolve(res);
+        } else { // The existence of the file is converted to a rejection which aborts the pipeline
+            togo.reject({
+                exists: true,
+                softAbort: true, // Interpreted by CLI driver to not set process exit error
+                message: "File at path " + coords.filePath + " already exists"
+            });
+        }
+    }, function (err) {
+        togo.reject(err);
+    });
+    return togo;
 };

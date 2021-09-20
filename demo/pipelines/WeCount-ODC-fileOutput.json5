@@ -3,12 +3,10 @@
     parents: "fluid.pipelines.WeCount-ODC",
     elements: {
         output: {
-            type: "fluid.fileOutput",
+            type: "fluid.csvFileOutput",
             input: "{joined}.data",
-            path: "outputData",
-            value: "output.csv",
-            provenance: "provenance.csv",
-            provenanceMap: "provenanceMap.json"
+            filePath: "outputData/output.csv",
+            writeProvenance: true
         }
     }
 }

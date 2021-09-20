@@ -1,0 +1,9 @@
+{  // A pipeline defining an "octokit" instance with no authorization - this is suitable for use in test cases
+   // This will contextualise any pipeline elements which manipulate github repositories
+    type: "fluid.pipelines.withUnauthOctokit",
+    elements: {
+        octokit: {
+            type: "fluid.octokit"
+        }
+    }
+}

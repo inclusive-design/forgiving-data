@@ -1,5 +1,6 @@
 {
     type: "fluid.pipelines.WeCount-ODC",
+    parents: "fluid.pipelines.withUnauthOctokit",
     elements: {
         WeCount: {
             type: "fluid.fetchGitCSV",

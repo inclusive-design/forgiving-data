@@ -21,10 +21,14 @@ fluid.data.readJSONSync = function (fileName, message) {
     return togo;
 };
 
+fluid.data.encodeJSON = function (value) {
+    return JSON.stringify(value, null, 4) + "\n";
+};
+
 // Taken from %bagatelle/src/dataProcessing/writeJSON.js
 
 fluid.data.writeJSONSync = function (filename, doc) {
-    var formatted = JSON.stringify(doc, null, 4) + "\n";
+    var formatted = fluid.data.encodeJSON(doc);
     fs.writeFileSync(filename, formatted);
     console.log("Written " + formatted.length + " bytes to " + filename);
 };

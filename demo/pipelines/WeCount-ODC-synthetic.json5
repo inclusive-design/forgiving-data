@@ -1,6 +1,7 @@
 {
     type: "fluid.pipelines.WeCount-ODC-synthetic",
     parents: "fluid.pipelines.WeCount-ODC",
+    require: "%forgiving-data/demo/pipes/inventCovid.js",
     elements: {
         joined: {
             type: "fluid.compoundElement",

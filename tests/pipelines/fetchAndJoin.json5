@@ -1,16 +1,22 @@
 {
     type: "fluid.tests.pipelines.fetchAndJoin",
+    parents: "fluid.pipelines.withUnauthOctokit",
     elements: {
+        config: {
+            type: "fluid.component",
+            repoOwner: "inclusive-design",
+            repoName: "forgiving-data-test-data"
+        },
         left: {
             type: "fluid.fetchGitCSV",
-            repoOwner: "inclusive-design",
-            repoName: "forgiving-data-test-data",
+            repoOwner: "{config}.repoOwner",
+            repoName: "{config}.repoName",
             filePath: "joinLeft.csv"
         },
         right: {
             type: "fluid.fetchGitCSV",
-            repoOwner: "inclusive-design",
-            repoName: "forgiving-data-test-data",
+            repoOwner: "{config}.repoOwner",
+            repoName: "{config}.repoName",
             filePath: "joinRight.csv"
         },
         joined: {
