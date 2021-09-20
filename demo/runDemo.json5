@@ -1,4 +1,4 @@
 { // Run configuration file for demonstration pipeline - can be run directly from command line via runFluidPipeline %forgiving-data/runDemo.json5
     loadDirectory: "%forgiving-data/demo/pipelines",
-    execPipeline: ["fluid.pipelines.WeCount-ODC-fileOutput", "fluid.pipelines.WeCount-ODC-synthetic"]
+    execMergedPipeline: ["fluid.pipelines.WeCount-ODC-fileOutput", "fluid.pipelines.WeCount-ODC-synthetic"]
 }
