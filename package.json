@@ -1,6 +1,6 @@
 {
     "name": "forgiving-data",
-    "version": "0.4.0",
+    "version": "1.0.0",
     "description": "Algorithms for processing and relating data in ways which promote ownership, representation and inclusion, maintaining rather than effacing provenance",
     "main": "index.js",
     "scripts": {
@@ -15,19 +15,19 @@
     "license": "BSD-3-Clause",
     "repository": "https://github.com/inclusive-design/forgiving-data",
     "dependencies": {
-        "infusion": "3.0.0-dev.20210120T204128Z.6e4be079f.FLUID-6580",
+        "infusion": "4.0.0-dev.20210622T193827Z.ac6adb829.FLUID-6629",
         "kettle": "2.2.0",
         "rimraf": "3.0.2",
         "json5": "2.2.0",
         "git-ops-api": "1.0.0",
         "@octokit/core": "3.5.1",
         "papaparse": "5.3.1",
-        "axios": "0.21.1"
+        "axios": "0.21.4"
     },
     "devDependencies": {
-        "eslint": "7.30.0",
+        "eslint": "7.32.0",
         "eslint-config-fluid": "2.0.0",
-        "fluid-lint-all": "1.1.4",
+        "fluid-lint-all": "1.1.5",
         "node-jqunit": "1.1.9"
     }
 }
