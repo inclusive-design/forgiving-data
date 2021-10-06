@@ -1,0 +1,18 @@
+{
+    type: "fluid.tests.pipelines.fetchUrl",
+    parents: "fluid.pipelines.withUnauthOctokit",
+    elements: {
+        ODCConfig: {
+            type: "fluid.component",
+            fetchUrl: "https://raw.githubusercontent.com/inclusive-design/forgiving-data/main/tests/data/joinLeft.csv"
+        },
+        ODC: {
+            type: "fluid.fetchUrlCSV",
+            url: "{ODCConfig}.fetchUrl"
+        },
+        testOutput: {
+            type: "fluid.tests.dataPipeline.testFetchOutput",
+            input: "{ODC}.data"
+        }
+    }
+}
