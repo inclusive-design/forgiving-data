@@ -13,6 +13,12 @@ jqUnit.module("URL Fetch Tests");
 
 fluid.registerNamespace("fluid.tests.dataPipeline");
 
+// Indirect in order to check pipeline's ability to store provenance of data-sourced options
+fluid.tests.dataPipeline.indirectUrl = function (options) {
+    var togo = fluid.promise();
+    togo.resolve(options);
+    return togo;
+};
 
 fluid.tests.dataPipeline.testFetchOutput = async function (options) {
     var input = options.input;
