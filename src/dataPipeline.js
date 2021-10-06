@@ -33,6 +33,14 @@ fluid.defaults("fluid.dataPipe", {
     gradeNames: "fluid.function"
 });
 
+// A pipe which outputs a record to an isomorphically named provenance record for its pipeline
+fluid.defaults("fluid.provenancePipe", {
+    gradeNames: "fluid.dataPipe",
+    // A hash of option paths which will be output into the provenance record
+    provenanceMap: {
+    }
+});
+
 // A pipe which sources data in a purely algorithmic way, and so the provenance of any data it writes is taken solely from its own definition
 fluid.defaults("fluid.overlayProvenancePipe", {
     gradeNames: "fluid.dataPipe"
@@ -41,7 +49,7 @@ fluid.defaults("fluid.overlayProvenancePipe", {
 // A pipe which contributes a simple, uniform provenance record covering all its output - e.g. a file loader
 // Currently disused - fluid.fetchGitCSV fills in its own provenance
 fluid.defaults("fluid.selfProvenancePipe", {
-    gradeNames: "fluid.dataPipe"
+    gradeNames: "fluid.provenancePipe"
 });
 
 
@@ -166,7 +174,7 @@ fluid.compoundElement.waitCompletion = function (that) {
 
 /** Compute data dependencies of this element by traversing its configuration recursively.
  * @param {fluid.component} that - The component representing the element
- * @param {Object} options - The element's options
+ * @param {Object} options - The element's "inner" options
  * @param {Object[]} waitSet - The waitSet to be computed. **This is supplied as an empty array and populated by this function**
  * @param {String[]} segs - The array of path segments to the traversed options **This is supplied as an empty array and is modified by this function**
  * @return {Object} The supplied options, with any references to data dependencies censored - this is suitable for use as a provenance record
@@ -347,6 +355,29 @@ fluid.data.makeSkeleton = function (tocopy) {
     }
 };
 
+// Implementation note: because of our limitations on asynchrony in the crusty old framework, we have to conflate the idea
+// of "a data dependency" with "anything sourced asynchronously". So in the covid-assessment-centres pipeline, we scrape
+// a page in order to determine a URL for another pipeline step. This requires the author to stick the url in the "data"
+// section of the pipeline's output which then means it is ordinarily not available in the provenance record which is
+// computed statically. Naturally the "new framework" will put synchronous and asynchronously available options on the
+// same footing.
+/** Copy any data-sourced dependencies that are mentioned in the pipe's provenanceMap options into its provenance record.
+ * @param {Object} provenanceRecord - The statically computed provenance record for the component **This structure will be modified**
+ * @param {Object} upDefaults - The option defaults for the component's "inner type"
+ * @param {Object} overlay - The isomorphic structure holding dynamic data-sourced dependencies
+ */
+fluid.dataPipe.enhanceProvenanceRecord = function (provenanceRecord, upDefaults, overlay) {
+    if (fluid.hasGrade(upDefaults, "fluid.provenancePipe")) {
+        fluid.each(upDefaults.provenanceMap, function (troo, path) {
+            var existing = fluid.get(provenanceRecord, path);
+            if (existing === undefined) {
+                var dynamic = fluid.get(overlay, path);
+                fluid.set(provenanceRecord, path, dynamic);
+            }
+        });
+    }
+};
+
 /** Launch the `fluid.dataPipe` function wrapped within a `fluid.dataPipeWrapper` by resolving its input options
  * with respect to the `waitSet` computed by `fluid.dataPipeWrapper.computeWaitSet`, and then interpreting its
  * output into a data provenance record by means of fluid.dataPipeWrapper.interpretPipeResult. This result is then
@@ -362,6 +393,7 @@ fluid.dataPipeWrapper.launch = function (that) {
     var provenanceKey = fluid.data.pathWithinPipeline(that).join(".");
 
     var upDefaults = fluid.defaults(that.options.innerType);
+    fluid.dataPipe.enhanceProvenanceRecord(that.provenanceRecord, upDefaults, overlay);
     // TODO: Upgrade to an extensible interpretation system
     if (fluid.hasGrade(upDefaults, "fluid.dataPipe.withOctokit")) {
         var octokitComponent = fluid.resolveContext("fluid.octokit", that);
@@ -669,7 +701,13 @@ fluid.flatProvenanceCSVSource = async function (data, options, provenanceExtra) 
 
 
 fluid.defaults("fluid.fetchGitCSV", {
-    gradeNames: "fluid.dataPipe.withOctokit"
+    gradeNames: ["fluid.provenancePipe", "fluid.dataPipe.withOctokit"],
+    provenanceMap: {
+        repoOwner: true,
+        repoName: true,
+        filePath: true,
+        branchName: true
+    }
 });
 
 //(from gitOpsApi.js)
@@ -701,7 +739,10 @@ fluid.fetchGitCSV = async function (options) {
 };
 
 fluid.defaults("fluid.fetchUrlCSV", {
-    gradeNames: "fluid.dataPipe.withOctokit"
+    gradeNames: "fluid.provenancePipe",
+    provenanceMap: {
+        url: true
+    }
 });
 
 // TODO: Similarly turn into DataSource - and resolve our issues with promotion of encoding
