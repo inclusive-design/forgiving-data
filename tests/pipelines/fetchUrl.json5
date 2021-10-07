@@ -6,8 +6,17 @@
             fetchUrl: "https://raw.githubusercontent.com/inclusive-design/forgiving-data/main/tests/data/joinLeft.csv"
         },
         ODC: {
-            type: "fluid.fetchUrlCSV",
-            url: "{ODCConfig}.data.fetchUrl"
+            type: "fluid.compoundElement",
+            elements: {
+                ODC: {
+                    type: "fluid.fetchUrlCSV",
+                    url: "{ODCConfig}.data.fetchUrl"
+                },
+                filter: {
+                    type: "fluid.tests.dataPipeline.removeThirdPipe",
+                    input: "{ODC}.data"
+                }
+            }
         },
         testOutput: {
             type: "fluid.tests.dataPipeline.testFetchOutput",
