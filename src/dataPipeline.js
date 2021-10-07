@@ -297,6 +297,25 @@ fluid.data.pathWithinPipeline = function (that) {
     return pathWithinPipeline;
 };
 
+/** Given the path of a pipe within a pipeline, return a provenance key, by suitably collapsing repeated path
+ * segments. Under the terms of open interception, the provenance of a pipe, e.g. at path "ODC.ODC" should simply
+ * be "ODC" reflecting the fact that the true provenance of the record was generated at the nested site, and that
+ * any consumer of the data and its provenance should be ignorant of whether it was intercepted or not - unless,
+ * of course, the interception process itself rewrote some of the data
+ * @param {String[]} path - The path of the pipe within its pipeline
+ * @return {String} A suitable provenance key, collapsing paths whose segments are identical
+ */
+fluid.data.getProvenanceKey = function (path) {
+    var counts = new Map();
+    path.reduce(function (counts, seg) {
+        return counts.set(seg, (counts.get(seg) || 0) + 1);
+    }, counts);
+    if (counts.size === 1) {
+        return [...counts.keys()][0];
+    } else {
+        return path.join(".");
+    }
+};
 
 /** Interprets the result from a `fluid.dataPipe` function by looking up a suitable algorithm from its grade content
  * (currently `fluid.overlayProvenancePipe` and `fluid.selfProvenancePipe` are recognised.
@@ -390,7 +409,7 @@ fluid.dataPipeWrapper.launch = function (that) {
         var fetched = fluid.get(oneWait.target, oneWait.parsed.segs);
         fluid.set(overlay, oneWait.sourceSegs, fetched);
     });
-    var provenanceKey = fluid.data.pathWithinPipeline(that).join(".");
+    var provenanceKey = fluid.data.getProvenanceKey(fluid.data.pathWithinPipeline(that));
 
     var upDefaults = fluid.defaults(that.options.innerType);
     fluid.dataPipe.enhanceProvenanceRecord(that.provenanceRecord, upDefaults, overlay);
