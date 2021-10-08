@@ -1,6 +1,6 @@
 {
     "name": "forgiving-data",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "description": "Algorithms for processing and relating data in ways which promote ownership, representation and inclusion, maintaining rather than effacing provenance",
     "main": "index.js",
     "scripts": {
