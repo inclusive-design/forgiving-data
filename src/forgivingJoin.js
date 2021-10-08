@@ -100,6 +100,7 @@ fluid.getMembersDeep = function (holder, path) {
 fluid.forgivingJoin = function (options) {
     var left = options.left.value;
     var right = options.right.value;
+
     var leftName = options.left.provenanceKey;
     var rightName = options.right.provenanceKey;
 

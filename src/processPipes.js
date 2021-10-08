@@ -32,7 +32,9 @@ fluid.dataPipe.makeFilterer = function (input) {
                 data: input.provenance.data.filter( (value, index) => accepts[index]),
                 headers: input.provenance.headers
             },
-            provenanceMap: input.provenanceMap
+            provenanceMap: input.provenanceMap,
+            // TODO: this should be filled in by a case of fluid.dataPipeWrapper.interpretPipeResult
+            provenanceKey: input.provenanceKey
         };
     };
 
