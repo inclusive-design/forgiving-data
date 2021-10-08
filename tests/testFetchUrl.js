@@ -21,40 +21,14 @@ fluid.tests.dataPipeline.indirectUrl = function (options) {
 };
 
 // A filter which removes the third element of an array
-fluid.tests.dataPipeline.removeThird = function (data) {
-    return data.filter(function (row, index) {
-        return index !== 2;
-    });
+fluid.tests.dataPipeline.removeThird = function (row, index) {
+    return index !== 2;
 };
-
-// Act on data via some kind of isomorphic filter which does not change columns and acts on the provenance in the same way
-fluid.tests.dataPipeline.isomorphicPipe = function (input, filter) {
-    return {
-        value: {
-            data: filter(input.value.data),
-            headers: input.value.headers
-        },
-        provenance: {
-            data: filter(input.provenance.data),
-            headers: input.provenance.headers
-        },
-        provenanceMap: input.provenanceMap
-    };
-};
-
-// TODO: Produce a tangledMat that can proxy operations like array.filter!
-fluid.tests.dataPipeline.removeThirdPipe = function (options) {
-    return fluid.tests.dataPipeline.isomorphicPipe(options.input, fluid.tests.dataPipeline.removeThird);
-};
-
-fluid.defaults("fluid.tests.dataPipeline.removeThirdPipe", {
-    gradeNames: "fluid.dataPipe"
-});
 
 fluid.tests.dataPipeline.testFetchOutput = async function (options) {
     var input = options.input;
     var joinLeft = await fluid.tests.fetchCSVFile("%forgiving-data/tests/data/joinLeft.csv");
-    var filtered = fluid.tests.dataPipeline.removeThird(joinLeft.data);
+    var filtered = joinLeft.data.filter(fluid.tests.dataPipeline.removeThird);
     jqUnit.assertDeepEq("Expected data fetched", filtered, input.value.data);
 
     var expectedProvenance = {

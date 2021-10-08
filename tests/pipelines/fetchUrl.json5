@@ -13,8 +13,9 @@
                     url: "{ODCConfig}.data.fetchUrl"
                 },
                 filter: {
-                    type: "fluid.tests.dataPipeline.removeThirdPipe",
-                    input: "{ODC}.data"
+                    type: "fluid.dataPipe.filter",
+                    input: "{ODC}.data",
+                    func: "fluid.tests.dataPipeline.removeThird"
                 }
             }
         },
