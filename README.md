@@ -116,9 +116,9 @@ details.
 You can also refer to any of the options configured into another pipeline element by referring to its definition in the
 same context-qualified way.
 
-#### Available pipeline elements
+#### I/O pipeline elements
 
-Pipeline elements available include:
+Pipeline elements reading and writing data are as follows:
 
 ##### fluid.fetchGitCSV
 
@@ -174,48 +174,6 @@ The top-level member `data` of this element will resolve to the loaded `Provenan
 The provenance key will be derived from the element's name in the pipeline, and the provenance structure will be
 filled in from the URL and its access time.
 
-##### fluid.forgivingJoin
-
-Executes an [inner](https://en.wikipedia.org/wiki/Join_(SQL)#Inner_join) or
-[outer join](https://en.wikipedia.org/wiki/Join_(SQL)#Outer_join) given two CSV structures.
-
-This join chooses a single best pair of columns to join on based on a simple
-value space intersection performed over all pairs of columns in the provided tables.
-An improvement to this algorithm, with increased computational cost, would be
-able to select a compound column for the join, as well as providing a ranked
-list of choices rather than just a single best choice - these improvements
-are ticketed at [DATA-1](https://issues.fluidproject.org/browse/DATA-1).
-
-Accepts options:
-
-````text
-    left: {ProvenancedTable} The left dataset to join
-    right: {ProvenancedTable} The right dataset to join
-    outerLeft: {Boolean} [optional] If `true`, a left outer join will be executed
-    outerRight: {Boolean} [optional] If `true`, a right outer join will be executed
-    outputColumns: {Object} A map of columns to be output in terms of the input columns. The keys of this map record
-                   the names of the columns to be output, and the corresponding values record the corresponding input
-                   column, in a two-part period-qualified format - before the period comes the provenance name of the
-                   relevant dataset, and after the period comes the column name in that dataset 
-````
-
-For example:
-
-````text
-    joined: {
-        type: "fluid.forgivingJoin",
-        left: "{WeCount}.data",
-        right: "{ODC}.data",
-        outerRight: true,
-        outputColumns: {
-            location_name: "ODC.location_name",
-            city:          "ODC.city",
-            "Individual Service":   "WeCount.Personalized or individual service is offered",
-            "Wait Accommodations":  "WeCount.Queue accommodations"
-        }
-    }
-````
-
 ##### fluid.csvFileOutput
 
 Outputs CSV and provenance data to CSV and JSON files -
@@ -268,6 +226,84 @@ A `TransformableFileEntry` structure holds the following:
     convertEntry: {String|String[]} [optional] The name of one or more functions accepting this `FileEntry`
                   structure and returning one or more others representing additional data to be written
     input: {ProvenancedTable} The data to be written
+````
+
+#### Data processing pipeline elements
+
+Pipeline elements transforming and processing data are as follows:
+
+##### fluid.dataPipe.filter
+
+Filters the rows of a CSV dataset using a filter callback function with the same signature as the callback accepted
+by the builtin JavaScript [Array.filter](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/filter)
+operation.
+
+Accepts options:
+
+````text
+    input: {ProvenancedTable} The dataset to filter
+    func: {String} Name of a function registered in the Infusion global namespace performing the filter 
+````
+
+e.g. one may write in the pipeline configuration
+
+````text
+    filter: {
+        input: "{MyDataSource}.data",
+        func: "fluid.examples.removeThird",
+    }
+````
+
+with the following function implementation in JavaScript:
+
+````javascript
+fluid.examples.removeThird = function (row, index) {
+    return index !== 2;
+};
+````
+
+to filter the data by removing the third row.
+
+##### fluid.forgivingJoin
+
+Executes an [inner](https://en.wikipedia.org/wiki/Join_(SQL)#Inner_join) or
+[outer join](https://en.wikipedia.org/wiki/Join_(SQL)#Outer_join) given two CSV structures.
+
+This join chooses a single best pair of columns to join on based on a simple
+value space intersection performed over all pairs of columns in the provided tables.
+An improvement to this algorithm, with increased computational cost, would be
+able to select a compound column for the join, as well as providing a ranked
+list of choices rather than just a single best choice - these improvements
+are ticketed at [DATA-1](https://issues.fluidproject.org/browse/DATA-1).
+
+Accepts options:
+
+````text
+    left: {ProvenancedTable} The left dataset to join
+    right: {ProvenancedTable} The right dataset to join
+    outerLeft: {Boolean} [optional] If `true`, a left outer join will be executed
+    outerRight: {Boolean} [optional] If `true`, a right outer join will be executed
+    outputColumns: {Object} A map of columns to be output in terms of the input columns. The keys of this map record
+                   the names of the columns to be output, and the corresponding values record the corresponding input
+                   column, in a two-part period-qualified format - before the period comes the provenance name of the
+                   relevant dataset, and after the period comes the column name in that dataset 
+````
+
+For example:
+
+````text
+    joined: {
+        type: "fluid.forgivingJoin",
+        left: "{WeCount}.data",
+        right: "{ODC}.data",
+        outerRight: true,
+        outputColumns: {
+            location_name: "ODC.location_name",
+            city:          "ODC.city",
+            "Individual Service":   "WeCount.Personalized or individual service is offered",
+            "Wait Accommodations":  "WeCount.Queue accommodations"
+        }
+    }
 ````
 
 #### Working with GitHub credentials
